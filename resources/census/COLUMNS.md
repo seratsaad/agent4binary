@@ -5,6 +5,8 @@
 | column | unit | description |
 |---|---|---|
 | sdss_id | — | SDSS-V identifier |
+| gaia_dr3_source_id | — | Gaia DR3 identifier (positional nearest neighbour within 2 arcsec; 0 if unmatched) |
+| ra, dec | deg | J2000 coordinates (ICRS) |
 | teff_seed, logg_seed, feh_seed | K, dex, dex | pipeline labels used to seed the fit |
 | verdict | — | classifier verdict string |
 | prefers_binary | bool | two-component fit beats the single-star fit |
@@ -17,7 +19,7 @@
 | error | — | non-empty if the fit failed |
 | sb2 | bool | accepted as SB2 at the recalibrated gate (all rows in this file) |
 
-## stage2_catalog_full.csv — the multi-epoch supplement (49,591 rows)
+## stage2_catalog_full.csv — the multi-epoch supplement (50,187 rows, one per candidate; rows with a non-empty error field have no usable per-visit solution)
 
 | column | unit | description |
 |---|---|---|
