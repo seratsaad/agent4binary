@@ -51,3 +51,21 @@ Per-catalog-star ra, dec (J2000 degrees), for the sky-distribution figure.
 
 Per-dwarf Gaia photometry and astrometry (G, BP−RP, parallax, ruwe,
 non-single-star flag), joinable to the catalog on sdss_id.
+
+## dr19_sb3_triples.csv — hierarchical triple candidates (778 rows)
+
+| column | unit | description |
+|---|---|---|
+| sdss_id | — | SDSS-V identifier (all rows are catalog SB2 with 3+ epochs) |
+| n_visits | — | number of APOGEE visits fit |
+| delta_chi2_23 | — | chi2(binary) − chi2(triple), summed over visits |
+| f_imp_23 | — | improvement fraction of the binary-to-triple step |
+| q2_triple, q3_triple | — | secondary and tertiary mass ratios (relative to the primary) |
+| outer_component | — | index (0/1/2) of the near-constant outer component |
+| v1_triple, v2_triple, v3_triple | km/s | per-visit component velocities, ';'-separated |
+| inner_corr | — | Pearson correlation of the two inner velocity tracks |
+| q_inner_dyn | — | inner dynamical mass ratio from the anti-phase slope |
+| vetted | bool | passes the codified velocity-configuration checks |
+| vision_triple | bool | the vision node judges the tracks a hierarchical triple |
+| double_vetted | bool | vetted AND vision_triple (higher-purity selection) |
+| fail | — | which codified checks failed, empty if none |
