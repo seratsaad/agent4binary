@@ -52,20 +52,31 @@ Per-catalog-star ra, dec (J2000 degrees), for the sky-distribution figure.
 Per-dwarf Gaia photometry and astrometry (G, BP−RP, parallax, ruwe,
 non-single-star flag), joinable to the catalog on sdss_id.
 
-## dr19_sb3_triples.csv — hierarchical triple candidates (778 rows)
+## dr19_sb3_triples.csv — triple-lined (SB3) candidates (8,112 rows, one per candidate)
 
 | column | unit | description |
 |---|---|---|
-| sdss_id | — | SDSS-V identifier (all rows are catalog SB2 with 3+ epochs) |
+| sdss_id | — | SDSS-V identifier (multi-epoch systems with 3+ epochs) |
 | n_visits | — | number of APOGEE visits fit |
 | delta_chi2_23 | — | chi2(binary) − chi2(triple), summed over visits |
 | f_imp_23 | — | improvement fraction of the binary-to-triple step |
 | q2_triple, q3_triple | — | secondary and tertiary mass ratios (relative to the primary) |
-| outer_component | — | index (0/1/2) of the near-constant outer component |
+| outer | — | index (0/1/2) of the near-constant outer component |
 | v1_triple, v2_triple, v3_triple | km/s | per-visit component velocities, ';'-separated |
 | inner_corr | — | Pearson correlation of the two inner velocity tracks |
-| q_inner_dyn | — | inner dynamical mass ratio from the anti-phase slope |
-| vetted | bool | passes the codified velocity-configuration checks |
-| vision_triple | bool | the vision node judges the tracks a hierarchical triple |
-| double_vetted | bool | vetted AND vision_triple (higher-purity selection) |
-| fail | — | which codified checks failed, empty if none |
+| q_inner_dyn | — | inner dynamical mass ratio from the anti-phase slope (NaN if undefined) |
+| sb3 | bool | accepted as a hierarchical triple by the vision inspection (1,022 rows) |
+| vision_confidence, vision_reason | — | the inspection's confidence and one-line reason |
+
+## dr19_sb2_orbit_posteriors.csv — joint Keplerian posterior summaries (4,225 rows, systems with 8+ visits)
+
+| column | unit | description |
+|---|---|---|
+| sdss_id | — | SDSS-V identifier |
+| status | — | 'ok' if the sampler kept enough posterior draws; 'unconstrained' otherwise |
+| n_ep | — | number of epochs fit |
+| n_kept | — | posterior samples kept by the rejection sampler |
+| P16, P50, P84 | days | period posterior percentiles |
+| e16, e50, e84 | — | eccentricity posterior percentiles |
+| K1 | km/s | median primary velocity semi-amplitude |
+| v_sys | km/s | median systemic velocity |
