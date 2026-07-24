@@ -2300,6 +2300,33 @@ def compose_binary5_sc(teff1, logg1, feh, mgh, vmacro, q, rv1_kms, rv2_kms,
     return _cont_norm_model(flux_sum)
 
 
+def compose_triple5_sc(teff1, logg1, feh, mgh, vmacro, q2, q3,
+                       rv1_kms, rv2_kms, rv3_kms, age_gyr=_MS_REPR_AGE_GYR):
+    """Three-component (SB3) composite on the SC stack, mirroring
+    compose_binary5_sc with a second isochrone-tied companion (q3 <= q2 <= 1).
+    Each component is un-normalized by OUR Teff-keyed pseudo-continuum, weighted
+    by its 2MASS-H luminosity 10^(-0.4 M_H) relative to the primary, Doppler-
+    shifted by its own velocity, summed, and re-normalized once in the SC
+    continuum space. At q3 -> 0 it reduces to compose_binary5_sc; at q2=q3=1 with
+    equal velocities it reduces to payne5_single_model_sc."""
+    f1 = payne_predict5_sc(teff1, logg1, feh, mgh, vmacro)
+    teff2, logg2, _R2, _R1 = secondary_from_q(teff1, logg1, feh, q2, age_gyr)
+    teff3, logg3, _R3, _ = secondary_from_q(teff1, logg1, feh, q3, age_gyr)
+    f2 = payne_predict5_sc(teff2, logg2, feh, mgh, vmacro)
+    f3 = payne_predict5_sc(teff3, logg3, feh, mgh, vmacro)
+    MH1, MH2 = _iso_ours.mh_from_q_ours(teff1, logg1, feh, q2, age_gyr)
+    _, MH3 = _iso_ours.mh_from_q_ours(teff1, logg1, feh, q3, age_gyr)
+    w2 = 10.0 ** (-0.4 * (MH2 - MH1))
+    w3 = 10.0 ** (-0.4 * (MH3 - MH1))
+    f1p = f1 * pseudo_continuum_sc(teff1, logg1, feh)
+    f2p = f2 * pseudo_continuum_sc(teff2, logg2, feh)
+    f3p = f3 * pseudo_continuum_sc(teff3, logg3, feh)
+    flux_sum = (_doppler_shift(f1p, rv1_kms)
+                + w2 * _doppler_shift(f2p, rv2_kms)
+                + w3 * _doppler_shift(f3p, rv3_kms))
+    return _cont_norm_model(flux_sum)
+
+
 SINGLE_DV_BOUND = 150.0    # km/s velocity bound for the single-star fit
 _SINGLE_DV_SCAN = np.arange(-90.0, 90.1, 5.0)   # coarse RV scan grid
 
@@ -2639,7 +2666,8 @@ def _v2_from_momentum(v1, gamma, q_dyn):
     return gamma + (gamma - v1) / max(q_dyn, 1e-3)
 
 
-def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20):
+def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
+                                fit_triple=False):
     """STAGE 2: joint multi-epoch single-vs-SB2 detector (El-Badry sec:visit).
 
     Fits the individual VISIT spectra of one system SIMULTANEOUSLY and decides
@@ -2808,6 +2836,8 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20):
     # is good even when the catalog v_rad is missing.
     per_v1 = []           # per-visit refined primary velocity (the v1 seed)
     per_q = []            # per-visit best q_spec
+    per_rvA = []          # per-visit binary-fit component velocities (triple seeds)
+    per_rvB = []
     labels_seed = np.array([t0, g0, h0, m0, v0], float)
     label_acc = np.zeros(5)
     for obs, err, vh in zip(obs_list, err_list, vseed_list):
@@ -2826,8 +2856,11 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20):
                 best = (c, float(dv))
         per_v1.append(best[1])
         # A quick q estimate from the single-visit binary fit (spectral dilution).
-        p_b, _, _ = fit_binary5_sc(obs, err, p_s[0], p_s[1], p_s[2], p_s[3], p_s[4])
+        p_b, _, _ = fit_binary5_sc(obs, err, p_s[0], p_s[1], p_s[2], p_s[3], p_s[4],
+                                   dv_center=v_anchor)
         per_q.append(float(p_b["q"]))
+        per_rvA.append(float(p_b["rv1"]))
+        per_rvB.append(float(p_b["rv2"]))
     # Shared-label seed = mean of the per-visit single-fit labels.
     lab0 = label_acc / N
     lab0 = np.clip(lab0, _LMINSC, _LMAXSC)
@@ -2981,7 +3014,7 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20):
         # (which Stage 1 already evaluated on the higher-S/N coadd).
         and (N >= 2))
 
-    return {
+    out = {
         "n_visits_used": int(N),
         "chi2_single": float(chi2_single),
         "chi2_binary": float(chi2_sb2),
@@ -3004,6 +3037,126 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20):
         "logg_single": float(lab_s[1]),
         "feh_single": float(lab_s[2]),
     }
+
+    # ----- 6. TRIPLE (SB3) branch, El-Badry style. -------------------------- #
+    # Fit three isochrone-tied components with INDEPENDENT per-visit velocities
+    # (shared labels + q2, q3), seeded from the SB2 solution. Accept as a triple
+    # when it beats SB2 by the same Table B1 ladder scaled by N (delta/N vs the
+    # single-epoch rungs) AND a hierarchical velocity signature is present: one
+    # component near-constant across visits, the other two velocity-variable.
+    # Attempt the triple whenever the binary clearly improves on the single
+    # (El-Badry: triples appear where the binary beats the single but fits
+    # poorly, so the FULL SB2 acceptance must NOT gate the attempt) and there
+    # are enough epochs for the hierarchical velocity signature.
+    if fit_triple and N >= 3 and delta > 300.0 * N:
+        IDX_Q2, IDX_Q3 = 5, 6
+
+        def _sb3_models(p):
+            labels = np.clip(p[:5], _LMINSC, _LMAXSC)
+            q2 = float(np.clip(p[IDX_Q2], 0.15, 0.99))
+            q3 = float(np.clip(p[IDX_Q3], 0.1, q2))
+            ms = []
+            for i in range(N):
+                v1 = float(p[7 + i]); v2 = float(p[7 + N + i]); v3 = float(p[7 + 2 * N + i])
+                try:
+                    ms.append(compose_triple5_sc(labels[0], labels[1], labels[2],
+                                                 labels[3], labels[4], q2, q3, v1, v2, v3))
+                except ValueError:
+                    ms.append(None)
+            return ms
+
+        def resid_sb3(p):
+            ms = _sb3_models(p)
+            out_r = []
+            for obs, err, gd, m in zip(obs_list, err_list, base_good, ms):
+                if m is None:
+                    out_r.append(np.full(obs.shape, 1e3)); continue
+                g = gd & np.isfinite(m)
+                r = np.zeros_like(obs); r[g] = (obs[g] - m[g]) / err[g]
+                out_r.append(r)
+            return np.concatenate(out_r)
+
+        lo_t = list(_LMINSC) + [0.15, 0.1] + [-150.0] * (3 * N)
+        hi_t = list(_LMAXSC) + [0.99, 0.99] + [150.0] * (3 * N)
+        # seed: SB2 labels + q2=q_spec, a third component at q3~0.5*q2 whose
+        # per-visit velocity is scanned coarsely against the SB2 residual.
+        # EL-BADRY SEEDING: per-visit third-component velocity by scanning the
+        # triple model against each visit with the per-visit BINARY velocities
+        # (per_rvA/per_rvB, from the one-at-a-time fits of step 3) held fixed.
+        q2s = float(np.clip(max(q_spec, np.median(per_q)), 0.3, 0.99))
+        q3s = float(np.clip(0.5 * q2s, 0.1, q2s))
+        per_rvC = []
+        for i in range(N):
+            best = (np.inf, gamma)
+            for v3 in np.arange(-90.0, 90.1, 10.0):
+                try:
+                    m = compose_triple5_sc(lab_b[0], lab_b[1], lab_b[2], lab_b[3],
+                                           lab_b[4], q2s, q3s,
+                                           per_rvA[i], per_rvB[i], float(v3))
+                except ValueError:
+                    continue
+                c = chi2(obs_list[i], err_list[i], m)
+                if c < best[0]:
+                    best = (c, float(v3))
+            per_rvC.append(best[1])
+        A = np.array(per_rvA, float); B = np.array(per_rvB, float)
+        C = np.array(per_rvC, float)
+        # three assignment seeds: each track in turn as v1 (the fit itself
+        # decides the outer star from the recovered spreads)
+        seeds_t = []
+        for order in ((A, B, C), (C, A, B), (B, C, A)):
+            seeds_t.append(list(lab_b) + [q2s, q3s]
+                           + list(order[0]) + list(order[1]) + list(order[2]))
+        # plus the SB2-anchored fallback
+        seeds_t.append(list(lab_b) + [q_spec, 0.5 * q_spec]
+                       + list(v1_pv) + list(v2_pv) + [float(np.median(v1_pv))] * N)
+        best_c3, best_p3 = np.inf, None
+        for s in seeds_t:
+            x0 = np.clip(np.array(s, float), lo_t, hi_t)
+            try:
+                r3 = least_squares(resid_sb3, x0, method="trf", bounds=(lo_t, hi_t),
+                                   ftol=5e-4, xtol=5e-4, max_nfev=500)
+            except Exception:
+                continue
+            ms = _sb3_models(r3.x)
+            c = sum(chi2(o, e, m) for o, e, m in zip(obs_list, err_list, ms) if m is not None)
+            if c < best_c3:
+                best_c3, best_p3 = c, r3.x
+        if best_p3 is not None and best_c3 < chi2_sb2:
+            d23 = float(chi2_sb2 - best_c3)
+            v1t = [float(best_p3[7 + i]) for i in range(N)]
+            v2t = [float(best_p3[7 + N + i]) for i in range(N)]
+            v3t = [float(best_p3[7 + 2 * N + i]) for i in range(N)]
+            # hierarchical signature: the least-variable component is the outer
+            # star; the other two must both be velocity-variable.
+            spreads = [float(np.ptp(v)) for v in (v1t, v2t, v3t)]
+            outer = int(np.argmin(spreads))
+            inner = [s for k, s in enumerate(spreads) if k != outer]
+            hier = (min(spreads) < 10.0) and (min(inner) > 10.0)
+            d23_pv = d23 / max(N, 1)
+            min_f3 = table_b1_min_fimp(d23_pv)
+            sb3_cat = np.concatenate([m if m is not None else o
+                                      for m, o in zip(_sb3_models(best_p3), obs_list)])
+            fimp3 = f_imp(obs_cat, sb2_cat, sb3_cat, err_cat)
+            passes3 = (min_f3 is not None and fimp3 >= max(min_f3, FIMP_FLOOR)
+                       and hier)
+            out.update({
+                "chi2_triple": float(best_c3),
+                "delta_chi2_23": d23,
+                "delta_chi2_23_per_visit": float(d23_pv),
+                "f_imp_23": float(fimp3),
+                "prefers_triple": bool(passes3),
+                "q2_triple": float(np.clip(best_p3[IDX_Q2], 0.15, 0.99)),
+                "q3_triple": float(np.clip(best_p3[IDX_Q3], 0.1, 0.99)),
+                "v1_triple_per_visit": [float(x) for x in v1t],
+                "v2_triple_per_visit": [float(x) for x in v2t],
+                "v3_triple_per_visit": [float(x) for x in v3t],
+                "outer_component": outer,
+            })
+        else:
+            out.update({"prefers_triple": False, "delta_chi2_23": 0.0})
+
+    return out
 
 
 # =========================================================================== #
@@ -3192,4 +3345,174 @@ def binspec_single_vs_binary(wl8575, flux8575, err8575, num_p0_binary=10):
         "teff_single": float(popt_s[0]),
         "logg_single": float(popt_s[1]),
         "feh_single": float(popt_s[2]),
+    }
+
+
+def compose_triple_flux(teff1, logg1, feh, q2, q3, rv1_kms, rv2_kms, rv3_kms,
+                        age_gyr=_MS_REPR_AGE_GYR):
+    """UN-normalized three-component flux sum for the SB3 branch.
+
+    Same construction as compose_binary_flux with one more isochrone-tied
+    component: q2 = M2/M1 and q3 = M3/M1 with q3 <= q2 <= 1, each component
+    un-normalized by its own pseudo-continuum, Doppler-shifted by its own RV,
+    and weighted by its MIST 2MASS-H luminosity relative to the primary.
+    At q3 -> 0 the third weight vanishes and the sum reduces to the binary;
+    at q2 = q3 = 1 with equal RVs it reduces to the single star.
+    """
+    f1 = payne_predict(teff1, logg1, feh)
+    teff2, logg2, _R2, _R1 = secondary_from_q(teff1, logg1, feh, q2, age_gyr)
+    teff3, logg3, _R3, _ = secondary_from_q(teff1, logg1, feh, q3, age_gyr)
+    f2 = payne_predict(teff2, logg2, feh)
+    f3 = payne_predict(teff3, logg3, feh)
+    MH1, MH2 = _iso_ours.mh_from_q_ours(teff1, logg1, feh, q2, age_gyr)
+    _, MH3 = _iso_ours.mh_from_q_ours(teff1, logg1, feh, q3, age_gyr)
+    w2 = 10.0 ** (-0.4 * (MH2 - MH1))
+    w3 = 10.0 ** (-0.4 * (MH3 - MH1))
+    f1_phys = f1 * pseudo_continuum(teff1, logg1, feh)
+    f2_phys = f2 * pseudo_continuum(teff2, logg2, feh)
+    f3_phys = f3 * pseudo_continuum(teff3, logg3, feh)
+    return (_doppler_shift(f1_phys, rv1_kms)
+            + w2 * _doppler_shift(f2_phys, rv2_kms)
+            + w3 * _doppler_shift(f3_phys, rv3_kms))
+
+
+def compose_triple(teff1, logg1, feh, q2, q3, rv1_kms, rv2_kms, rv3_kms,
+                   age_gyr=_MS_REPR_AGE_GYR):
+    """Normalized three-component composite (SB3 model), one re-normalization."""
+    flux_sum = compose_triple_flux(teff1, logg1, feh, q2, q3,
+                                   rv1_kms, rv2_kms, rv3_kms, age_gyr)
+    return flux_sum / _running_continuum(flux_sum)
+
+
+def fit_triple(obs, err, teff1, logg1, feh, q2_seed, rv1_seed, rv2_seed,
+               age_gyr=_MS_REPR_AGE_GYR):
+    """Fit the three-component (SB3) model, seeded from an SB2 solution.
+
+    Strategy mirrors fit_binary: the SB2 fit supplies (q2, rv1, rv2); a coarse
+    scan over the third component's (q3, rv3) locates the basin with the inner
+    pair frozen, and the best seeds are polished with least_squares over all
+    five parameters (q2, f3, rv1, rv2, rv3), where f3 = q3/q2 in (0.15, 1]
+    keeps the mass ordering M3 <= M2 <= M1 by construction.
+
+    Returns (best_params_dict, normalized_model, chi2); the dict carries
+    q2, q3, rv1, rv2, rv3.
+    """
+    obs = np.asarray(obs, float)
+    err = np.asarray(err, float)
+    base_good = np.isfinite(obs) & np.isfinite(err) & (err > 0)
+
+    feh_lo, feh_hi = float(_ISO_LABEL_LO[2]), float(_ISO_LABEL_HI[2])
+    teff1 = float(np.clip(teff1, 4500.0, 6800.0))
+    logg1 = float(np.clip(logg1, 3.5, 5.0))
+    feh = float(np.clip(feh, feh_lo, feh_hi))
+    q2_seed = float(np.clip(q2_seed, 0.2, 1.0))
+
+    def _model(params):
+        q2, f3, rv1, rv2, rv3 = params
+        q3 = float(np.clip(f3 * q2, 0.1, 1.0))
+        return compose_triple(teff1, logg1, feh, float(q2), q3,
+                              float(rv1), float(rv2), float(rv3), age_gyr)
+
+    def resid(params):
+        try:
+            model = _model(params)
+        except ValueError:
+            return np.full(obs.shape, 1e3)
+        good = base_good & np.isfinite(model)
+        r = np.zeros_like(obs)
+        r[good] = (obs[good] - model[good]) / err[good]
+        return r
+
+    def _chi2_of(model):
+        good = base_good & np.isfinite(model)
+        return float(np.sum(((obs[good] - model[good]) / err[good]) ** 2))
+
+    # coarse (q3, rv3) scan with the inner pair frozen at the SB2 solution
+    seeds = []
+    for f3 in (0.3, 0.5, 0.7, 0.9):
+        for rv3 in np.arange(-120.0, 121.0, 30.0):
+            m = _model([q2_seed, f3, rv1_seed, rv2_seed, rv3])
+            seeds.append((_chi2_of(m), f3, rv3))
+    seeds.sort()
+    lo = [0.2, 0.15, -150.0, -150.0, -150.0]
+    hi = [1.0, 1.0, 150.0, 150.0, 150.0]
+    best = (np.inf, None, None)
+    for c0, f3, rv3 in seeds[:4]:
+        x0 = np.clip(np.array([q2_seed, f3, rv1_seed, rv2_seed, rv3]),
+                     lo, hi)
+        try:
+            sol = least_squares(resid, x0, bounds=(lo, hi), method="trf",
+                                x_scale=[0.1, 0.1, 10.0, 10.0, 10.0],
+                                max_nfev=200)
+        except Exception:
+            continue
+        m = _model(sol.x)
+        c = _chi2_of(m)
+        if c < best[0]:
+            best = (c, sol.x, m)
+    if best[1] is None:
+        raise RuntimeError("fit_triple: no seed converged")
+    c, x, m = best
+    q2, f3, rv1, rv2, rv3 = [float(v) for v in x]
+    return (dict(q2=q2, q3=float(np.clip(f3 * q2, 0.1, 1.0)),
+                 rv1=rv1, rv2=rv2, rv3=rv3), m, c)
+
+
+def binspec_binary_vs_triple(wl8575, flux8575, err8575, num_p0_binary=10,
+                             num_p0_triple=6):
+    """Binary-vs-triple (SB2 vs SB3) fit on the SAME binspec production stack as
+    binspec_single_vs_binary, so the shared single-star model cancels and
+    Delta-chi2(SB2 -> SB3) isolates the third component.
+
+    Returns a compact dict:
+      {chi2_binary, chi2_triple, delta_chi2_23, q2, q3, rv1, rv2, rv3,
+       v3_split}  (v3_split = min separation of the third component from the
+      inner pair; a genuine SB3 has a resolved third velocity).
+    """
+    spec, spec_err = ingest_to_binspec_grid(wl8575, flux8575, err8575)
+    return _binspec_binary_vs_triple_grid(spec, spec_err, num_p0_binary, num_p0_triple)
+
+
+def _binspec_binary_vs_triple_grid(spec, spec_err, num_p0_binary=10, num_p0_triple=6):
+    """SB2-vs-SB3 fit on an already-ingested binspec-grid (spec, spec_err)."""
+
+    popt_s, _, _model_s = _bs_fitting.fit_normalized_spectrum_single_star_model(
+        norm_spec=spec, spec_err=spec_err,
+        NN_coeffs_norm=_BS_NN_NORM, NN_coeffs_flux=_BS_NN_FLUX, num_p0=1)
+    popt_b, _, model_b = _bs_fitting.fit_normalized_spectrum_binary_model(
+        norm_spec=spec, spec_err=spec_err,
+        NN_coeffs_norm=_BS_NN_NORM, NN_coeffs_flux=_BS_NN_FLUX,
+        NN_coeffs_Teff2_logg2=_BS_NN_T2, NN_coeffs_R=_BS_NN_R,
+        p0_single=popt_s, num_p0=num_p0_binary)
+    chi2_b = float(np.sum((model_b - spec) ** 2 / spec_err ** 2))
+
+    # if the binary fell back to a single (6-label popt), build the 9-label seed
+    if len(popt_b) >= 9:
+        p0_binary = list(popt_b)
+    else:
+        t1, g1, fe = float(popt_s[0]), float(popt_s[1]), float(popt_s[2])
+        al, vm, dv = float(popt_s[3]), float(popt_s[4]), float(popt_s[5])
+        p0_binary = [t1, g1, fe, al, 0.95, vm, vm, dv, dv]
+
+    popt_t, _, model_t = _bs_fitting.fit_normalized_spectrum_triple_model(
+        norm_spec=spec, spec_err=spec_err,
+        NN_coeffs_norm=_BS_NN_NORM, NN_coeffs_flux=_BS_NN_FLUX,
+        NN_coeffs_Teff2_logg2=_BS_NN_T2, NN_coeffs_R=_BS_NN_R,
+        p0_binary=p0_binary, num_p0=num_p0_triple)
+    chi2_t = float(np.sum((model_t - spec) ** 2 / spec_err ** 2))
+
+    # triple nests binary; clamp so Delta-chi2 >= 0
+    if chi2_t > chi2_b:
+        chi2_t = chi2_b
+        model_t = model_b
+
+    q2 = float(popt_t[4]); q3 = float(popt_t[5])
+    rv1 = float(popt_t[9]); rv2 = float(popt_t[10]); rv3 = float(popt_t[11])
+    v3_split = float(min(abs(rv3 - rv1), abs(rv3 - rv2)))
+    return {
+        "chi2_binary": chi2_b,
+        "chi2_triple": chi2_t,
+        "delta_chi2_23": chi2_b - chi2_t,
+        "q2": q2, "q3": q3, "rv1": rv1, "rv2": rv2, "rv3": rv3,
+        "v3_split": v3_split,
     }

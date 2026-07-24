@@ -364,3 +364,60 @@ def fit_all_p0s(fit_func, norm_spec, spec_err, all_x0, bounds, tol = 5e-4):
     best = np.argmin(all_chi2)
     popt, pcov, model_spec = all_popt[best], all_pcov[best], all_model_specs[best]
     return popt, pcov, model_spec
+
+
+def fit_normalized_spectrum_triple_model(norm_spec, spec_err,
+    NN_coeffs_norm, NN_coeffs_flux, NN_coeffs_Teff2_logg2, NN_coeffs_R,
+    p0_binary, num_p0 = 6):
+    '''
+    Fit a three-component (SB3) model, seeded from a binary solution p0_binary
+    (the 9-label vector [Teff1, logg1, feh, alpha, q2, vm1, vm2, dv1, dv2]).
+    A grid of starts over the third component's mass ratio q3 and velocity dv3
+    locates its basin; all twelve labels are then polished with trf.
+
+    labels = [Teff1, logg1, feh, alpha, q2, q3, vm1, vm2, vm3, dv1, dv2, dv3]
+
+    returns popt, pcov, model_spec (mirrors the binary fitter).
+    '''
+    tol = 5e-4
+
+    def fit_func(dummy_variable, *labels):
+        return spectral_model.get_normalized_spectrum_triple(labels = labels,
+            NN_coeffs_norm = NN_coeffs_norm, NN_coeffs_flux = NN_coeffs_flux,
+            NN_coeffs_Teff2_logg2 = NN_coeffs_Teff2_logg2, NN_coeffs_R = NN_coeffs_R,
+            spec_err = spec_err)
+
+    t1, g1, feh, alpha, q2, vm1, vm2, dv1, dv2 = p0_binary
+    min_q = get_minimum_q_for_this_teff(Teff1 = t1, logg1 = g1, feh = feh,
+        NN_coeffs_Teff2_logg2 = NN_coeffs_Teff2_logg2)
+
+    lower = [4200, 4.0, -1, -0.3, min_q, min_q, 0, 0, 0, -100, -100, -100]
+    upper = [7000, 5.0, 0.5, 0.5, 1, 1, 45, 45, 45, 100, 100, 100]
+    bounds = [lower, upper]
+
+    # grid of third-component starts; q3 <= q2 by construction of the search
+    all_x0 = []
+    for f3 in (0.4, 0.65, 0.9):
+        q3 = float(np.clip(f3 * q2, min_q, q2))
+        for dv3 in (-60, 0, 60):
+            all_x0.append([t1, g1, feh, alpha, q2, q3, vm1, vm2, vm2,
+                           dv1, dv2, dv3])
+    all_x0 = all_x0[:num_p0] if num_p0 < len(all_x0) else all_x0
+    # clip every start strictly inside the bounds so curve_fit(trf) accepts it
+    lo = np.array(lower); hi = np.array(upper); eps = 1e-6 * (hi - lo)
+    all_x0 = [list(np.clip(np.array(x0), lo + eps, hi - eps)) for x0 in all_x0]
+
+    popt, pcov, model_spec = fit_all_p0s(fit_func = fit_func, norm_spec = norm_spec,
+        spec_err = spec_err, all_x0 = all_x0, bounds = bounds, tol = tol)
+
+    # guard: the triple must not fit worse than the seed binary (it nests it at
+    # q3 -> min_q with the third light negligible). Fall back if it does.
+    binary_labels = list(np.clip(np.array([t1, g1, feh, alpha, q2, min_q,
+        vm1, vm2, vm2, dv1, dv2, 0.0]), lo + eps, hi - eps))
+    binary_model = fit_func([], *binary_labels)
+    chi2_bin = np.sum((binary_model - norm_spec)**2/spec_err**2)
+    chi2_tri = np.sum((model_spec - norm_spec)**2/spec_err**2)
+    if chi2_bin < chi2_tri:
+        popt, model_spec = binary_labels, binary_model
+
+    return popt, pcov, model_spec

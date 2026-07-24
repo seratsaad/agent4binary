@@ -285,3 +285,39 @@ def sb2_model_visit_spectra(labels, spec_errs, NN_coeffs_norm, NN_coeffs_flux,
         all_norm_specs.append(this_spec)
     stitched_norm_spec = np.concatenate(all_norm_specs)
     return stitched_norm_spec
+
+
+def get_normalized_spectrum_triple(labels, NN_coeffs_norm, NN_coeffs_flux,
+    NN_coeffs_Teff2_logg2, NN_coeffs_R, spec_err = None):
+    '''
+    Three-component (SB3) extension of get_normalized_spectrum_binary: a second
+    isochrone-tied companion is added, with its own mass ratio q3 <= q2 <= 1, its
+    own macroturbulence, and its own velocity. Teff/logg of each secondary come
+    from the same (Teff1, logg1, feh, q) isochrone map as the binary branch, so
+    at q3 -> 0 the third flux vanishes and the model reduces to the binary, and
+    at q2 = q3 = 1 with equal velocities it reduces to the single star.
+
+    labels = [Teff1, logg1, feh, alphafe, q2, q3,
+              vmacro1, vmacro2, vmacro3, dv1, dv2, dv3]
+    '''
+    Teff1, logg1, feh, alphafe, q2, q3, vm1, vm2, vm3, dv1, dv2, dv3 = labels
+    Teff2, logg2 = get_Teff2_logg2_NN(labels = [Teff1, logg1, feh, q2],
+        NN_coeffs_Teff2_logg2 = NN_coeffs_Teff2_logg2)
+    Teff3, logg3 = get_Teff2_logg2_NN(labels = [Teff1, logg1, feh, q3],
+        NN_coeffs_Teff2_logg2 = NN_coeffs_Teff2_logg2)
+    labels1 = [Teff1, logg1, feh, alphafe, vm1, dv1]
+    labels2 = [Teff2, logg2, feh, alphafe, vm2, dv2]
+    labels3 = [Teff3, logg3, feh, alphafe, vm3, dv3]
+    f1 = get_unnormalized_spectrum_single_star(labels = labels1,
+        NN_coeffs_norm = NN_coeffs_norm, NN_coeffs_flux = NN_coeffs_flux,
+        NN_coeffs_R = NN_coeffs_R)
+    f2 = get_unnormalized_spectrum_single_star(labels = labels2,
+        NN_coeffs_norm = NN_coeffs_norm, NN_coeffs_flux = NN_coeffs_flux,
+        NN_coeffs_R = NN_coeffs_R)
+    f3 = get_unnormalized_spectrum_single_star(labels = labels3,
+        NN_coeffs_norm = NN_coeffs_norm, NN_coeffs_flux = NN_coeffs_flux,
+        NN_coeffs_R = NN_coeffs_R)
+    f_triple = f1 + f2 + f3
+    cont = utils.get_apogee_continuum(wavelength = wavelength, spec = f_triple,
+        spec_err = spec_err, cont_pixels = cont_pixels)
+    return f_triple/cont
