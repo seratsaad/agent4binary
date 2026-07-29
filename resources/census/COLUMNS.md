@@ -18,6 +18,7 @@
 | teff_single, logg_single, feh_single | K, dex, dex | best single-star fit labels |
 | error | — | non-empty if the fit failed |
 | sb2 | bool | accepted as SB2 at the recalibrated gate (all rows in this file) |
+| teff_floor | flag | 1 if the seed temperature sits at the 4200 K lower edge of the model grid, where the single-star labels are unreliable; cut on this for a clean sample |
 
 ## stage2_catalog_full.csv — the multi-epoch supplement (50,187 rows, one per candidate; rows with a non-empty error field have no usable per-visit solution)
 
@@ -64,3 +65,19 @@ non-single-star flag), joinable to the catalog on sdss_id.
 | e16, e50, e84 | — | eccentricity posterior percentiles |
 | K1 | km/s | median primary velocity semi-amplitude |
 | v_sys | km/s | median systemic velocity |
+
+## Eccentricity comparison products
+
+| file | description |
+|---|---|
+| ecc_marginal_real.csv | per-system eccentricity likelihood on the 36-point grid, for the 2,009 multi-epoch SB2 with median period 6 to 400 days (`loglike` is semicolon-separated, one value per grid point) |
+| ecc_validation.csv | injection test: recovered against injected index difference, four inputs by four realizations |
+| ecc_null_dalpha.csv | injection null: recovered difference when the same index is injected into both classes at the real twin and non-twin sampling, 24 realizations |
+| ecc_variants.csv | the difference under each sample and matching choice, with bootstrap errors and sample sizes |
+
+The estimator is `scripts/ecc_marginal.py` (per-system likelihood on a grid in
+eccentricity), driven on the real data by `scripts/ecc_real_marginal.py`. The
+population step, the matching, and the bootstrap are in
+`scripts/ecc_final_table.py`, and the injection null is `scripts/ecc_null_full.py`.
+The population density is normalized on [0, EMAX] with EMAX = 0.95; the
+EMAX^(1+alpha) term depends on alpha and must not be dropped.
