@@ -8,7 +8,7 @@ science steps are MCP tool servers, and the operating decisions are written down
 in `SKILL.md`. A language-model agent drives the loop on the benchmark and worked
 examples; the full catalog run is the same deterministic core under a driver script.
 
-The method and the catalog are described in the accompanying paper (Saad & Ting 2026).
+The method and the catalog are described in the accompanying paper: https://arxiv.org/abs/2608.10866
 
 ## Results
 
@@ -80,10 +80,6 @@ resources/                   training manifest, train/hold-out split, benchmark 
 docs/mcp_tools.md            one-page tool catalog
 ```
 
-## Provenance and citation
+## Citations
 
-Method: El-Badry, Rix et al. 2018a (MNRAS 473, 5043) and El-Badry, Ting, Rix et
-al. 2018b (MNRAS 476, 528; binspec). MIST v1.2 (Choi et al. 2016); The Payne
-(Ting et al. 2019); APOGEE / SDSS DR19; Gaia DR3. The El-Badry network weights
-are used only as a benchmark reference and are not redistributed; nothing in the
-catalog path depends on them.
+Please cite our paper if you use the catalog or the tools: https://arxiv.org/abs/2608.10866
