@@ -81,3 +81,24 @@ population step, the matching, and the bootstrap are in
 `scripts/ecc_final_table.py`, and the injection null is `scripts/ecc_null_full.py`.
 The population density is normalized on [0, EMAX] with EMAX = 0.95; the
 EMAX^(1+alpha) term depends on alpha and must not be dropped.
+
+## benchmark_with_gaia.csv — the benchmark set with cross-match keys (10,210 rows)
+
+Released so the SB2 and control samples can be cross-matched against external
+catalogs (Gaia NSS, Kounkel et al. 2021, Kovalev et al. 2022/2024, and others).
+
+| column | description |
+|---|---|
+| sdss_id, gaia_dr3_source_id | identifiers; the Gaia id is the positional nearest neighbour |
+| is_sb2_benchmark | 1 for the injected/known SB2 benchmark, 0 for the control (single-star) set |
+| verdict, prefers_binary, delta_chi2, f_imp, min_fimp_required | classifier outputs and the gate the star had to clear |
+| best_q, best_rv1, best_rv2 | recovered mass ratio and component velocities |
+| teff_single, logg_single, feh_single | best single-star fit labels |
+| teff_seed, logg_seed, feh_seed, v_macro, snr | pipeline seed labels and visit S/N |
+| ruwe, parallax, phot_g_mean_mag, bp_rp | Gaia DR3 quantities |
+| gaia_nss | 1 if Gaia reports a non-single-star solution |
+| ruwe_high | 1 if RUWE > 1.4 |
+
+Controls carrying gaia_nss or ruwe_high are detected more often than quiet ones
+(14.4% and 13.0% against 7.7%), so the control set retains some genuine binaries
+and the quoted control false-positive rate is an upper bound.
