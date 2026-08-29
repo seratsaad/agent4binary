@@ -2667,7 +2667,7 @@ def _v2_from_momentum(v1, gamma, q_dyn):
 
 
 def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
-                                fit_triple=False, apply_bc=False):
+                                fit_triple=False, apply_bc=True):
     """STAGE 2: joint multi-epoch single-vs-SB2 detector (El-Badry sec:visit).
 
     Fits the individual VISIT spectra of one system SIMULTANEOUSLY and decides
@@ -2755,15 +2755,20 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             raw.append((f, iv, vh, float("nan"), bc))
 
     # ----- 2. Per-visit preprocessing + S/N cut. ---------------------------- #
-    # FRAME. CORRECTED 2026-08: DR19 mwmVisit flux is ALREADY barycentric-corrected,
-    # so no further shift is needed and apply_bc now defaults to False. The earlier
-    # code shifted every visit by -bc on the assumption that the flux was
-    # topocentric, which injected a spurious per-visit velocity of exactly -bc (up
-    # to ~60 km/s). Verified on stars the pipeline reports as non-variable: with no
-    # shift the per-visit velocity scatter is 0.0 km/s, with the shift it is ~10
-    # km/s and tracks each star's bc spread one-to-one. The single model is forced
-    # to ONE velocity across visits while the binary model has per-visit
-    # velocities, so the spurious scatter inflated delta_chi2 toward the binary.
+    # FRAME. mwmVisit flux is in the OBSERVED (topocentric) frame: the inter-visit
+    # velocity difference is dominated by the BARYCENTRIC correction (Earth's
+    # motion, up to ~60 km/s between visits), which is NOT orbital and would make
+    # the single model -- forced to ONE velocity -- misfit every visit. We remove
+    # it by Doppler-shifting each visit by -bc into the HELIOCENTRIC frame, so the
+    # only velocity difference left between visits is the star's orbital motion
+    # (v_Helio). This is the frame El-Badry's v_Helio,i and Eq. vr1_vr2 live in.
+    #
+    # 2026-08 NOTE: an attempt to remove this shift was investigated and REVERTED.
+    # The evidence was not decisive: a model-based cross-correlation suggested the
+    # flux was already aligned, but a model-free visit-to-visit cross-correlation
+    # regressing the residual on d(bc) gave a slope of -0.31 (0 = already
+    # heliocentric, -1 = topocentric), i.e. neither hypothesis. Any future test
+    # must control for template mismatch, which can dominate the model-based CCF.
     prepped = []          # list of (obs, err, vhelio_seed, snr)
     for f, iv, vh, snr_meta, bc in raw:
         good = np.isfinite(f) & np.isfinite(iv) & (iv > 0)
