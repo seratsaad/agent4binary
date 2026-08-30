@@ -102,3 +102,32 @@ catalogs (Gaia NSS, Kounkel et al. 2021, Kovalev et al. 2022/2024, and others).
 Controls carrying gaia_nss or ruwe_high are detected more often than quiet ones
 (14.4% and 13.0% against 7.7%), so the control set retains some genuine binaries
 and the quoted control false-positive rate is an upper bound.
+
+## external_sb2_crossmatch.csv — benchmark controls found in published SB2 catalogs (125 rows)
+
+Produced by `scripts/crossmatch_external_sb2.py`, which pulls the catalogs live
+from the VizieR TAP service. Added for the OJA referee round, which asked that
+the single-star training sample be cleaned against published SB2 catalogs.
+
+Catalogs matched:
+
+| catalog | VizieR table | matched on | hits |
+|---|---|---|---|
+| Kovalev, Chen & Han (2022), MNRAS 517, 356 | J/MNRAS/517/356/tablec1 | Gaia source_id | 10 |
+| Kovalev, Chen & Han (2024), MNRAS 527, 521 | J/MNRAS/527/521/tableb1 | Gaia source_id | 31 |
+| Kounkel et al. (2021), AJ 162, 184 | J/AJ/162/184/table1 | position, 2 arcsec | 103 |
+
+| column | description |
+|---|---|
+| sdss_id, gaia_dr3_source_id | identifiers, keyed to benchmark_with_gaia.csv |
+| in_kovalev22, in_kovalev24, in_kounkel21 | 1 if the star appears in that catalog |
+| kounkel_sep_arcsec, kounkel_id | separation and APOGEE id of the positional match |
+| removed_by_our_preliminary_pass | 1 if our own binary pass had already dropped it |
+| in_training_half | 1 if it entered the released network's training set |
+| in_heldout_controls | 1 if it is one of the held-out controls |
+
+Of the 7,866 controls, 125 (1.59%) appear in one of these catalogs. Our own
+preliminary binary pass had already removed 62 of them. Of the rest, 28 entered
+the training set of the catalog network (0.78% of it) and 35 fall in the
+held-out controls (0.97%), where dropping them moves the false-positive rate
+from 8.1% to about 7.8%.
