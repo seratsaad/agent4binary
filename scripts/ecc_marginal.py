@@ -206,3 +206,42 @@ def fit_alpha_grid(loglikes, e_grid, amin=-0.95, amax=3.0, n=200):
     i = int(np.argmax(ll))
     ok = ll > ll.max() - 0.5
     return A[i], A[ok].min(), A[ok].max(), A, ll
+
+
+# --------------------------------------------------------------------------- #
+# Two-velocity version (untied per-visit pairs; see orbit_sampler.twovel_linear
+# and docs/ecc_twovelocity_method.md).
+# --------------------------------------------------------------------------- #
+
+def system_loglike_on_egrid_twovel(t, a, b, q, sigma, e_grid, M_per_e=20_000, rng=None,
+                                   seed=0, pmin=0.5, pmax=5000.0):
+    """log L_j(e) on the supplied eccentricity grid from the untied pairs.
+
+    Same integration as system_loglike_on_egrid (per grid point, M_per_e draws of
+    P log-uniform on [pmin, pmax], omega and M0 uniform, drawn in the same order;
+    Monte Carlo average over them), with the two-velocity model
+    m1 = gamma + K1 S, m2 = gamma - (K1/q) S. Per draw, (K1, gamma) is solved by
+    orbit_sampler.twovel_linear, the label assignment of every visit is summed
+    over, L_i = 0.5 N(a_i|m1)N(b_i|m2) + 0.5 N(b_i|m1)N(a_i|m2) with per-visit
+    sigma on each velocity, and the linear pair is integrated out with the same
+    Laplace term as before, -0.5 ln det of the (weighted) normal matrix. K1 > 0."""
+    rng = rng if rng is not None else np.random.default_rng(seed)
+    t = np.asarray(t, float); a = np.asarray(a, float); b = np.asarray(b, float)
+    w = 1.0 / sigma**2
+    out = np.empty(len(e_grid))
+    for j, e0 in enumerate(e_grid):
+        P = np.exp(rng.uniform(np.log(pmin), np.log(pmax), M_per_e))
+        om = rng.uniform(0, 2 * np.pi, M_per_e)
+        M0 = rng.uniform(0, 2 * np.pi, M_per_e)
+        e = np.full(M_per_e, e0)
+        S = OS.rv_shape(t, P, e, om, M0)
+        K1, vs, c_nom, c_swp, det = OS.twovel_linear(S, a, b, q)
+        lw = OS.twovel_label_marginal(c_nom, c_swp, sigma**2) - 0.5 * np.log(np.abs(det) * w**2)
+        lw = np.where(K1 > 0, lw, -np.inf)
+        ok = np.isfinite(lw)
+        if not ok.any():
+            out[j] = -np.inf
+            continue
+        m = lw[ok].max()
+        out[j] = m + np.log(np.mean(np.exp(lw[ok] - m)))
+    return out

@@ -1,0 +1,127 @@
+{
+ "fiducial_label": "K1 + epochs (fiducial)",
+ "fiducial_diff": -0.0792642140468228,
+ "bootstrap_err": 0.1890642936878293,
+ "null_bias": 0.023118729096989962,
+ "null_err": 0.04511892729194937,
+ "null_bias_per_alpha": {
+  "0.10": {
+   "mean": 0.041833890746934256,
+   "sd": 0.2024639967499513,
+   "n_reps": 12
+  },
+  "0.30": {
+   "mean": 0.004403567447045666,
+   "sd": 0.23960940167808858,
+   "n_reps": 12
+  }
+ },
+ "null_n_reps": 24,
+ "matching_spread": 0.06952896936376728,
+ "matching_spread_variants": [
+  "K1 + epochs (fiducial)",
+  "period + epochs",
+  "period + epochs + K1",
+  "period + epochs, P>15d",
+  "observed only (no fitted vars)"
+ ],
+ "combined": -0.10238294314381276,
+ "error": 0.20643474108890117,
+ "significance": 0.49595791194720235,
+ "alpha_twin": -0.1969899665551838,
+ "alpha_nontwin": -0.117725752508361,
+ "mean_e_twin": 0.4231033203487293,
+ "mean_e_nontwin": 0.4452914001421464,
+ "ess_nontwin": 122.44198241585369,
+ "n_systems_file": 520,
+ "n_systems": 520,
+ "n_twins": 216,
+ "median_K1_twin": 15.439112220157178,
+ "median_K1_nontwin": 14.981958448982182,
+ "n_k1gt12": 309,
+ "n_k1gt12_twins": 131,
+ "median_K1_twin_k1gt12": 26.09228414797794,
+ "median_K1_nontwin_k1gt12": 24.738416843333624,
+ "max_variant_shift": 0.15852842809364548,
+ "variants": [
+  {
+   "label": "K1 + epochs (fiducial)",
+   "da": -0.0792642140468228,
+   "boot": 0.1890642936878293,
+   "n_t": 131,
+   "n_n": 178,
+   "corrected": -0.10238294314381276,
+   "upper_2sigma": 0.3104865390339896
+  },
+  {
+   "label": "period + epochs",
+   "da": -0.0660535117056856,
+   "boot": 0.1656849829024087,
+   "n_t": 131,
+   "n_n": 178,
+   "corrected": -0.08917224080267556,
+   "upper_2sigma": 0.28134906082591027
+  },
+  {
+   "label": "period + epochs + K1",
+   "da": -0.0528428093645485,
+   "boot": 0.1982729775938051,
+   "n_t": 131,
+   "n_n": 178,
+   "corrected": -0.07596153846153847,
+   "upper_2sigma": 0.3538392006010064
+  },
+  {
+   "label": "period + epochs, P>15d",
+   "da": 0.0660535117056856,
+   "boot": 0.2344254520311358,
+   "n_t": 116,
+   "n_n": 151,
+   "corrected": 0.04293478260869564,
+   "upper_2sigma": 0.5402286102026695
+  },
+  {
+   "label": "observed only (no fitted vars)",
+   "da": 0.0528428093645485,
+   "boot": 0.1856423674956029,
+   "n_t": 129,
+   "n_n": 198,
+   "corrected": 0.029724080267558538,
+   "upper_2sigma": 0.436334871025189
+  },
+  {
+   "label": "confident detections only",
+   "da": 0.0792642140468227,
+   "boot": 0.2422652042950434,
+   "n_t": 101,
+   "n_n": 134,
+   "corrected": 0.056145484949832736,
+   "upper_2sigma": 0.5682486948319151
+  }
+ ],
+ "n_deep_rows": 1389,
+ "validation_slope": 0.7398149422913654,
+ "validation_intercept": 0.036888781808586464,
+ "inputs": {
+  "null": {
+   "path": "/Users/saad.104/projects/agent4binary/resources/census/ecc_null_full.csv",
+   "md5": "859364ac35090498c9369594ca180366"
+  },
+  "real": {
+   "path": "/Users/saad.104/projects/agent4binary/resources/census/ecc_marginal_real.csv",
+   "md5": "aac4c41b0d39b0e8c6c408977124ad4c"
+  },
+  "validation": {
+   "path": "/Users/saad.104/projects/agent4binary/resources/census/ecc_validation.csv",
+   "md5": "1227bf58be395e2989d397e26786c3ce"
+  },
+  "deep": {
+   "path": "/Users/saad.104/projects/agent4binary/resources/census/stage2_deep.csv",
+   "md5": "a1041e73fe780031085f1d0a7e71140b"
+  },
+  "variants": {
+   "path": "/Users/saad.104/projects/agent4binary/resources/census/ecc_variants.csv",
+   "md5": "f056313c528afe3161f3f89a08489e9f"
+  }
+ }
+}

@@ -57,15 +57,20 @@ def variant(sub,cols,label,nboot=1500,seed=5):
 if __name__=="__main__":
     d=pd.read_csv(os.path.join(_R,'resources/census/ecc_marginal_real.csv'))
     d=d[(d.P50>=6)&(d.P50<=400)].copy()
-    mj=pd.read_csv(os.path.join(_R,'resources/census/stage2_mjds.csv')).set_index('sdss_id')
-    deep=pd.read_csv(os.path.join(_R,'resources/census/stage2_deep.csv')).set_index('sdss_id')
-    pr=lambda s: np.array([float(x) for x in str(s).split(';') if x not in ('','nan')])
+    # baseline = span of the fitted epochs (mjd_per_visit of the deep-table row;
+    # A4B_DEEP_TABLE overrides the default path)
+    import deep_table as DT
+    deep=DT.load_deep().set_index('sdss_id')
+    pr=DT.parse
+    _miss=set(d.sdss_id)-set(deep.index)
+    assert not _miss, '%d systems of ecc_marginal_real.csv are not in the deep table'%len(_miss)
+    # dvmax: v1_per_visit range for a v1-method table (as before); for a twovel
+    # table the largest untied pair separation max|a_i-b_i| (deep_table.observed_dv)
+    meth=DT.table_method(d)
     bl,dv=[],[]
     for sid in d.sdss_id:
-        try: t=pr(mj.loc[sid,'mjd_per_visit']); bl.append(t.max()-t.min())
-        except Exception: bl.append(np.nan)
-        try: v=pr(deep.loc[sid,'v1_per_visit']); dv.append(v.max()-v.min())
-        except Exception: dv.append(np.nan)
+        t=pr(deep.loc[sid,'mjd_per_visit']); bl.append(t.max()-t.min())
+        dv.append(DT.observed_dv(deep.loc[sid],meth))
     d['baseline']=bl; d['dvmax']=dv
     cat=pd.read_csv(os.path.join(_R,'resources/census/dr19_sb2_catalog_full.csv'))[['sdss_id','prefers_binary']]
     d=d.merge(cat,on='sdss_id',how='left')
@@ -85,4 +90,9 @@ if __name__=="__main__":
     da=np.array([v['da'] for v in V[:5]])
     print('\nmatching-scheme spread (first 5): mean %+.3f  sd %.3f  range %.3f'%(
         da.mean(),da.std(ddof=1),da.max()-da.min()))
-    pd.DataFrame(V).to_csv(os.path.join(_R,'resources/census/ecc_variants.csv'),index=False)
+    vpath=os.path.join(_R,'resources/census/ecc_variants.csv')
+    pd.DataFrame(V).to_csv(vpath,index=False)
+    # headline numbers (fiducial - null bias, combined error) -> ecc_headline.json
+    import ecc_headline
+    print()
+    ecc_headline.main(['--variants',vpath])

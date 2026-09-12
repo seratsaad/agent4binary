@@ -1,0 +1,21 @@
+{
+ "deep_table": {
+  "path": "/users/PAS2823/saadsm/agent4binary/resources/census/stage2_deep.csv",
+  "rows": 1389,
+  "md5": "a1041e73fe780031085f1d0a7e71140b"
+ },
+ "real_table": {
+  "path": "/users/PAS2823/saadsm/agent4binary/resources/census/ecc_marginal_real.csv",
+  "rows": 520,
+  "md5": "aac4c41b0d39b0e8c6c408977124ad4c"
+ },
+ "nreps": 12,
+ "alphas": [
+  0.1,
+  0.3
+ ],
+ "sigma": 1.5,
+ "draws": 30000,
+ "kcut": 12.0,
+ "method": "twovel"
+}

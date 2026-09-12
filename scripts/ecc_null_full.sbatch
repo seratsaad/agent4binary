@@ -11,4 +11,7 @@ source "$HOME/a4b_venv/bin/activate"
 export WORKERS=40 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 mkdir -p logs
 cd "$HOME/agent4binary"
-python scripts/ecc_null_full.py
+# arguments pass through, e.g. `sbatch scripts/ecc_null_full.sbatch --fresh` for a new
+# deep table; a resubmission without --fresh resumes (refused if the inputs changed).
+# A4B_DEEP_TABLE, if set at submission, is inherited by the job.
+python scripts/ecc_null_full.py "$@"
