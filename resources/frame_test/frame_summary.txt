@@ -1,0 +1,32 @@
+DR19 mwmVisit frame test: each visit against its own rest-frame coadd
+classified only when |v_rad|, |v_rel|, |bc| > 6 km/s; frame assigned when residual < 3 km/s; CCF peak >= 0.5
+
+sample   era      tel          n |   rest   bary   topo   none | alpha  beta
+control  SDSS-IV  apo25m   10220 |  99.3%   0.0%   0.0%   0.7% | -0.00 -0.00   (classified 5401)
+control  SDSS-IV  lco25m      56 | 100.0%   0.0%   0.0%   0.0% | +0.01 -0.00   (classified 51)
+control  SDSS-V   apo25m    1775 |  99.2%   0.0%   0.1%   0.7% | -0.00 -0.00   (classified 923)
+control  SDSS-V   lco25m    3651 |  99.5%   0.0%   0.0%   0.4% | -0.00 -0.02   (classified 3433)
+control  all      all      15702 |  99.4%   0.0%   0.0%   0.6% | -0.00 -0.01   (classified 9808)
+sb2      SDSS-IV  apo25m   13513 |  95.8%   0.1%   0.4%   3.7% | -0.01 +0.00   (classified 7452)
+sb2      SDSS-IV  lco25m      49 |  79.5%   0.0%   0.0%  20.5% | +0.03 -0.20   (classified 39)
+sb2      SDSS-V   apo25m    1043 |  96.4%   0.0%   0.0%   3.6% | +0.02 +0.00   (classified 500)
+sb2      SDSS-V   lco25m     120 |  67.8%   0.0%   0.0%  32.2% | -0.06 -0.13   (classified 90)
+sb2      all      all      14725 |  95.4%   0.1%   0.4%   4.1% | -0.00 -0.00   (classified 8081)
+
+stars with >= 2 classified visits: 2585 ; of these with visits in DIFFERENT frames: 26
+   mixed: control 54783881 Counter({'bary': 1, 'topo': 1, 'rest': 1})
+   mixed: control 54841148 Counter({'rest': 8, 'topo': 1})
+   mixed: control 55938542 Counter({'rest': 28, 'topo': 1})
+   mixed: control 55940396 Counter({'rest': 14, 'bary': 1})
+   mixed: sb2 115051656 Counter({'rest': 2, 'bary': 1})
+   mixed: sb2 55772218 Counter({'rest': 5, 'bary': 1})
+   mixed: sb2 55894630 Counter({'rest': 9, 'topo': 1})
+   mixed: sb2 55920062 Counter({'rest': 7, 'bary': 1, 'topo': 1})
+   mixed: sb2 55938991 Counter({'rest': 9, 'topo': 1, 'bary': 1})
+   mixed: sb2 55940102 Counter({'rest': 14, 'topo': 1})
+   mixed: sb2 56535852 Counter({'rest': 18, 'topo': 2})
+   mixed: sb2 57266979 Counter({'rest': 2, 'topo': 1})
+
+examples rest: 54382690(mjd 59953, shift -0.0, v_rad +8.8, v_rel +28.1), 54383089(mjd 57375, shift +0.4, v_rad -28.0, v_rel -11.9), 54383089(mjd 57404, shift -0.6, v_rad -28.0, v_rel -7.6), 54383089(mjd 57407, shift -0.3, v_rad -28.0, v_rel -7.4), 54383257(mjd 57374, shift +0.1, v_rad -7.5, v_rel +8.2), 54383257(mjd 57378, shift +0.2, v_rad -7.4, v_rel +9.2)
+examples bary: 54783881(mjd 57681, shift -35.3, v_rad -33.4, v_rel -44.3), 55940396(mjd 56678, shift +13.8, v_rad +15.6, v_rel +9.5), 115051656(mjd 57652, shift +3.3, v_rad +6.2, v_rel -19.3), 55772218(mjd 56290, shift -6.0, v_rad -8.0, v_rel -26.3), 55920062(mjd 56651, shift +6.4, v_rad +7.9, v_rel -10.1), 55938991(mjd 56672, shift +14.6, v_rad +16.2, v_rel +7.3)
+examples topo: 54783881(mjd 57765, shift -31.1, v_rad -52.3, v_rel -33.3), 54841148(mjd 59622, shift +5.8, v_rad -15.2, v_rel +7.2), 55938542(mjd 59222, shift +60.0, v_rad +75.3, v_rel +62.8), 55894630(mjd 56762, shift +35.4, v_rad +10.0, v_rel +38.1), 55920062(mjd 56762, shift +17.0, v_rad -8.4, v_rel +20.0), 55938991(mjd 55903, shift +6.3, v_rad +32.5, v_rel +7.7)

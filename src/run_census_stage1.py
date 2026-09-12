@@ -117,6 +117,8 @@ FIELDS = [
     "delta_chi2", "f_imp", "min_fimp_required",
     "best_q", "best_rv1", "best_rv2",                 # binary-fit params
     "teff_single", "logg_single", "feh_single",
+    "vmacro_single", "vmacro_1", "vmacro_2",          # fitted broadening, single and components
+    "labels_single", "labels_binary",                 # full best-fit label vectors
     "error",                                          # any per-star exception
 ]
 
@@ -173,6 +175,9 @@ def _fit_one(task):
             flux = np.asarray(d["flux_raw"], float)
             ivar = np.asarray(d["ivar"], float)
 
+            # binspec draws its extra binary starts with np.random, so seed per star
+            # to make each fit reproducible.
+            np.random.seed(int(sdss_id) % (2**32 - 1))
             if detector in ("binspec", "binspec_mlp"):
                 # binspec's PUBLIC fitting layer (normalization/masking + Eq.B1). For
                 # binspec_mlp we first swap in OUR curated MLP line net (62% detector,
@@ -197,6 +202,11 @@ def _fit_one(task):
             "teff_single": float(res["teff_single"]),
             "logg_single": float(res["logg_single"]),
             "feh_single": float(res["feh_single"]),
+            "vmacro_single": res.get("vmacro_single", ""),
+            "vmacro_1": res.get("vmacro_1", ""),
+            "vmacro_2": res.get("vmacro_2", ""),
+            "labels_single": ";".join("%.6g" % x for x in res.get("labels_single", [])),
+            "labels_binary": ";".join("%.6g" % x for x in res.get("labels_binary", [])),
         })
         return base
     except Exception as exc:  # one bad star must not kill the batch

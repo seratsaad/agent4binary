@@ -2606,6 +2606,10 @@ def dr19_sc_single_vs_binary(flux_raw, ivar, seed=None, snr_cap=SC_SNR_CAP):
         "teff_single": float(p_s[0]),
         "logg_single": float(p_s[1]),
         "feh_single": float(p_s[2]),
+        "mgh_single": float(p_s[3]),
+        "vmacro_single": float(p_s[4]),
+        "vmacro_1": float(p_b["vmacro"]),
+        "vmacro_2": float(p_b["vmacro"]),
         "dv_single": dv_single,
     }
 
@@ -2666,8 +2670,27 @@ def _v2_from_momentum(v1, gamma, q_dyn):
     return gamma + (gamma - v1) / max(q_dyn, 1e-3)
 
 
+def _visit_to_barycentric(f, iv, v_rad, bc, input_frame, apply_bc=True):
+    """Put one visit's raw flux/ivar in the barycentric frame for the joint fit.
+
+    DR19 mwmVisit flux is already shifted to the source rest frame by the visit's
+    own Doppler velocity, and v_rad = v_rel + bc is the velocity that was removed,
+    so input_frame="rest" shifts by +v_rad. input_frame="observed" is the legacy
+    path, which assumed unshifted flux and applied -bc; on rest-frame input it
+    erases the star's motion and injects a spurious -bc velocity instead.
+    """
+    if input_frame == "rest":
+        if np.isfinite(v_rad):
+            return _doppler_shift(f, v_rad), _doppler_shift(iv, v_rad)
+        return f, iv
+    if apply_bc and np.isfinite(bc):
+        return _doppler_shift(f, -bc), _doppler_shift(iv, -bc)
+    return f, iv
+
+
 def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
-                                fit_triple=False, apply_bc=True):
+                                fit_triple=False, apply_bc=True,
+                                input_frame="rest"):
     """STAGE 2: joint multi-epoch single-vs-SB2 detector (El-Badry sec:visit).
 
     Fits the individual VISIT spectra of one system SIMULTANEOUSLY and decides
@@ -2739,6 +2762,7 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
         v_rad = np.asarray(d.get("v_rad", np.full(flux_all.shape[0], np.nan)), float)
         bc_all = np.asarray(d.get("bc", np.full(flux_all.shape[0], np.nan)), float)
         snr_all = np.asarray(d.get("snr", np.full(flux_all.shape[0], np.nan)), float)
+        raw_mjd = np.asarray(d.get("mjd", np.full(flux_all.shape[0], np.nan)), float)
         raw = [(flux_all[i], ivar_all[i],
                 (float(v_rad[i]) if i < v_rad.size else float("nan")),
                 (float(snr_all[i]) if i < snr_all.size else float("nan")),
@@ -2746,6 +2770,7 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
                for i in range(flux_all.shape[0])]
     else:
         raw = []
+        raw_mjd = []
         for tup in visits:
             f, iv = np.asarray(tup[0], float), np.asarray(tup[1], float)
             vh = float(tup[2]) if len(tup) > 2 and tup[2] is not None else float("nan")
@@ -2753,24 +2778,19 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             # caller passes already-heliocentric flux it should pass bc = 0.
             bc = float(tup[3]) if len(tup) > 3 and tup[3] is not None else float("nan")
             raw.append((f, iv, vh, float("nan"), bc))
+            raw_mjd.append(float(tup[4]) if len(tup) > 4 and tup[4] is not None else float("nan"))
+        raw_mjd = np.asarray(raw_mjd, float)
 
     # ----- 2. Per-visit preprocessing + S/N cut. ---------------------------- #
-    # FRAME. mwmVisit flux is in the OBSERVED (topocentric) frame: the inter-visit
-    # velocity difference is dominated by the BARYCENTRIC correction (Earth's
-    # motion, up to ~60 km/s between visits), which is NOT orbital and would make
-    # the single model -- forced to ONE velocity -- misfit every visit. We remove
-    # it by Doppler-shifting each visit by -bc into the HELIOCENTRIC frame, so the
-    # only velocity difference left between visits is the star's orbital motion
-    # (v_Helio). This is the frame El-Badry's v_Helio,i and Eq. vr1_vr2 live in.
-    #
-    # 2026-08 NOTE: an attempt to remove this shift was investigated and REVERTED.
-    # The evidence was not decisive: a model-based cross-correlation suggested the
-    # flux was already aligned, but a model-free visit-to-visit cross-correlation
-    # regressing the residual on d(bc) gave a slope of -0.31 (0 = already
-    # heliocentric, -1 = topocentric), i.e. neither hypothesis. Any future test
-    # must control for template mismatch, which can dominate the model-based CCF.
-    prepped = []          # list of (obs, err, vhelio_seed, snr)
-    for f, iv, vh, snr_meta, bc in raw:
+    # FRAME. DR19 mwmVisit flux is in the source REST frame: Astra shifts each
+    # visit by its own Doppler velocity, and v_rad = v_rel + bc records what was
+    # removed (Astra datamodel; confirmed per visit against each star's rest-frame
+    # coadd by scripts/frame_test_visit_vs_coadd.py). The joint fit needs the
+    # barycentric frame, where the only velocity left between visits is the
+    # star's own motion (El-Badry's v_Helio,i), so input_frame="rest" shifts each
+    # visit by +v_rad. See _visit_to_barycentric for the legacy path.
+    prepped = []          # list of (obs, err, vhelio_seed, snr, raw visit index)
+    for k, (f, iv, vh, snr_meta, bc) in enumerate(raw):
         good = np.isfinite(f) & np.isfinite(iv) & (iv > 0)
         if not np.any(good):
             continue
@@ -2781,14 +2801,13 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             snr = float(np.median((f * np.sqrt(iv))[good]))
         if not np.isfinite(snr) or snr < snr_min:
             continue
-        # Heliocentric correction (remove the barycentric velocity). On the raw
-        # flux/ivar BEFORE normalization so the per-chip continuum is fit on the
-        # shifted spectrum exactly as for a coadd. bc unknown -> no shift.
-        if apply_bc and np.isfinite(bc):
-            f = _doppler_shift(f, -bc)
-            iv = _doppler_shift(iv, -bc)
+        # Frame shift on the raw flux/ivar BEFORE normalization, so the per-chip
+        # continuum is fit on the shifted spectrum exactly as for a coadd.
+        f0, iv0 = f, iv
+        f, iv = _visit_to_barycentric(f, iv, vh, bc, input_frame, apply_bc)
         obs, err = _prep_visit_sc(f, iv)
-        prepped.append((obs, err, vh, snr))
+        obs_r, err_r = _prep_visit_sc(f0, iv0) if input_frame == "rest" else (obs, err)
+        prepped.append((obs, err, vh, snr, k, obs_r, err_r))
 
     if not prepped:
         # No visit cleared S/N >= snr_min. El-Badry falls back to the coadd here;
@@ -2796,22 +2815,22 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
         # call still returns a (single-epoch) verdict rather than erroring. With
         # one visit there is no multi-epoch gain (flagged by n_visits_used == 1).
         scored = []
-        for f, iv, vh, snr_meta, bc in raw:
+        for k, (f, iv, vh, snr_meta, bc) in enumerate(raw):
             good = np.isfinite(f) & np.isfinite(iv) & (iv > 0)
             if not np.any(good):
                 continue
             snr = (snr_meta if (np.isfinite(snr_meta) and snr_meta > 0)
                    else float(np.median((f * np.sqrt(iv))[good])))
-            scored.append((snr, f, iv, vh, bc))
+            scored.append((snr, f, iv, vh, bc, k))
         if not scored:
             raise ValueError("no usable visit (all-zero ivar)")
         scored.sort(key=lambda t: -t[0])
-        snr, f, iv, vh, bc = scored[0]
-        if apply_bc and np.isfinite(bc):
-            f = _doppler_shift(f, -bc)
-            iv = _doppler_shift(iv, -bc)
+        snr, f, iv, vh, bc, k = scored[0]
+        f0, iv0 = f, iv
+        f, iv = _visit_to_barycentric(f, iv, vh, bc, input_frame, apply_bc)
         obs, err = _prep_visit_sc(f, iv)
-        prepped.append((obs, err, vh, snr))
+        obs_r, err_r = _prep_visit_sc(f0, iv0) if input_frame == "rest" else (obs, err)
+        prepped.append((obs, err, vh, snr, k, obs_r, err_r))
 
     # Keep the highest-S/N visits if there are many (cost grows with N).
     prepped.sort(key=lambda t: -t[3])
@@ -2820,6 +2839,11 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
     obs_list = [p[0] for p in prepped]
     err_list = [p[1] for p in prepped]
     vseed_list = [p[2] for p in prepped]
+    # Velocities come back in this S/N order, not time order, so return which
+    # visit each one belongs to; pairing them with raw mjd order is wrong.
+    idx_list = [p[4] for p in prepped]
+    obsr_list = [p[5] for p in prepped]
+    errr_list = [p[6] for p in prepped]
 
     # Seed labels (catalog seed or solar dwarf), clipped into the SC net box.
     if seed is None:
@@ -2847,14 +2871,19 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
     per_rvB = []
     labels_seed = np.array([t0, g0, h0, m0, v0], float)
     label_acc = np.zeros(5)
-    for obs, err, vh in zip(obs_list, err_list, vseed_list):
-        p_s, model_s, _ = fit_single5_sc(obs, err, *labels_seed)
+    for obs, err, vh, obs_r, err_r in zip(obs_list, err_list, vseed_list,
+                                          obsr_list, errr_list):
+        # fit_single5_sc fits labels at dv=0 and scans dv near 0, so it must see
+        # the visit in the rest frame; the joint fit below works in the
+        # barycentric frame, rest_off = v_rad apart.
+        p_s, model_s, _ = fit_single5_sc(obs_r, err_r, *labels_seed)
         label_acc += p_s[:5]   # p_s is [Teff,logg,feh,mgh,vmacro,dv]; accumulate labels
         # Velocity seed: the measured v_rad if finite, else 0; refine by a coarse
         # scan of the REST-FRAME single model around it (the single visit alone
         # constrains the bulk Doppler shift well). Use p_s[:5] so base_single is at
         # rest (dv=0); the scan below supplies the velocity, not the single fit's dv.
         v_anchor = vh if np.isfinite(vh) else 0.0
+        rest_off = v_anchor if input_frame == "rest" else 0.0
         base_single = payne5_single_model_sc(*p_s[:5])
         best = (np.inf, v_anchor)
         for dv in v_anchor + np.arange(-25.0, 25.5, 2.5):
@@ -2863,11 +2892,11 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
                 best = (c, float(dv))
         per_v1.append(best[1])
         # A quick q estimate from the single-visit binary fit (spectral dilution).
-        p_b, _, _ = fit_binary5_sc(obs, err, p_s[0], p_s[1], p_s[2], p_s[3], p_s[4],
-                                   dv_center=v_anchor)
+        p_b, _, _ = fit_binary5_sc(obs_r, err_r, p_s[0], p_s[1], p_s[2], p_s[3], p_s[4],
+                                   dv_center=v_anchor - rest_off)
         per_q.append(float(p_b["q"]))
-        per_rvA.append(float(p_b["rv1"]))
-        per_rvB.append(float(p_b["rv2"]))
+        per_rvA.append(float(p_b["rv1"]) + rest_off)
+        per_rvB.append(float(p_b["rv2"]) + rest_off)
     # Shared-label seed = mean of the per-visit single-fit labels.
     lab0 = label_acc / N
     lab0 = np.clip(lab0, _LMINSC, _LMAXSC)
@@ -2898,8 +2927,8 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             out.append(r)
         return np.concatenate(out)
 
-    lo_s = list(_LMINSC) + [-150.0]
-    hi_s = list(_LMAXSC) + [150.0]
+    lo_s = list(_LMINSC) + [gamma_seed - 150.0]
+    hi_s = list(_LMAXSC) + [gamma_seed + 150.0]
     x0_s = list(lab0) + [gamma_seed]
     res_s = least_squares(resid_single, np.clip(x0_s, lo_s, hi_s), method="trf",
                           bounds=(lo_s, hi_s), ftol=5e-4, xtol=5e-4, max_nfev=300)
@@ -2943,8 +2972,9 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             out.append(r)
         return np.concatenate(out)
 
-    lo_b = list(_LMINSC) + [0.1, -150.0, 0.1] + [-150.0] * N
-    hi_b = list(_LMAXSC) + [0.99, 150.0, 1.5] + [150.0] * N
+    # Velocities are barycentric, so bounds are centred on the systemic seed.
+    lo_b = list(_LMINSC) + [0.1, gamma_seed - 150.0, 0.1] + [gamma_seed - 150.0] * N
+    hi_b = list(_LMAXSC) + [0.99, gamma_seed + 150.0, 1.5] + [gamma_seed + 150.0] * N
 
     # Seed set: the per-visit-fit velocities (the El-Badry init), plus a couple
     # of robust fallbacks so a bad per-visit RV cannot strand the joint fit.
@@ -2952,6 +2982,25 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
     seeds.append(list(lab0) + [q_seed, gamma_seed, q_seed] + list(v1_seed))
     seeds.append(list(lab0) + [0.6, gamma_seed, 0.6] + [gamma_seed] * N)
     seeds.append(list(lab_s) + [0.5, v_s, 0.5] + [v_s] * N)   # seed from single fit
+    # Seeds from the untied per-visit two-component fits, so a pair that the
+    # visits resolve starts with its secondary where the visits put it, not on
+    # top of the primary. The per-visit fits can exchange the components, so each
+    # visit's pair is oriented against the single-star velocity, and the swapped
+    # orientation is tried as well. gamma and q_dyn come from the Wilson line
+    # when the visits span enough velocity, else from the momentum relation at
+    # the per-visit flux-ratio seed.
+    rA, rB = np.array(per_rvA, float), np.array(per_rvB, float)
+    if np.all(np.isfinite(rA)) and np.all(np.isfinite(rB)) and np.median(np.abs(rA - rB)) > 5.0:
+        swap = np.abs(rA - v1_seed) > np.abs(rB - v1_seed)
+        pA, pB = np.where(swap, rB, rA), np.where(swap, rA, rB)
+        for u1, u2 in ((pA, pB), (pB, pA)):
+            qd, gam = q_seed, float(np.median((u1 + q_seed * u2) / (1.0 + q_seed)))
+            if N >= 3 and np.ptp(u1) > 10.0:
+                slope, icpt = np.polyfit(u1, u2, 1)
+                if slope < -0.1:
+                    qd = float(np.clip(-1.0 / slope, 0.1, 1.5))
+                    gam = float(icpt / (1.0 - slope))
+            seeds.append(list(lab0) + [q_seed, gam, qd] + list(u1))
 
     best_chi2_b = np.inf
     best_p_b = None
@@ -3037,6 +3086,12 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
         "v1_per_visit": [float(x) for x in v1_pv],
         "v2_per_visit": [float(x) for x in v2_pv],
         "vhelio_seed_per_visit": [float(x) for x in vseed_list],
+        "visit_index_per_visit": [int(x) for x in idx_list],
+        "mjd_per_visit": [float(raw_mjd[x]) if x < len(raw_mjd) else float("nan") for x in idx_list],
+        # component velocities from each visit's own two-component fit, with no
+        # momentum tie, for an independent Wilson plot
+        "rv1_untied_per_visit": [float(x) for x in per_rvA],
+        "rv2_untied_per_visit": [float(x) for x in per_rvB],
         "teff_binary": float(lab_b[0]),
         "logg_binary": float(lab_b[1]),
         "feh_binary": float(lab_b[2]),
@@ -3083,8 +3138,8 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
                 out_r.append(r)
             return np.concatenate(out_r)
 
-        lo_t = list(_LMINSC) + [0.15, 0.1] + [-150.0] * (3 * N)
-        hi_t = list(_LMAXSC) + [0.99, 0.99] + [150.0] * (3 * N)
+        lo_t = list(_LMINSC) + [0.15, 0.1] + [gamma_seed - 150.0] * (3 * N)
+        hi_t = list(_LMAXSC) + [0.99, 0.99] + [gamma_seed + 150.0] * (3 * N)
         # seed: SB2 labels + q2=q_spec, a third component at q3~0.5*q2 whose
         # per-visit velocity is scanned coarsely against the SB2 residual.
         # EL-BADRY SEEDING: per-visit third-component velocity by scanning the
@@ -3352,6 +3407,12 @@ def binspec_single_vs_binary(wl8575, flux8575, err8575, num_p0_binary=10):
         "teff_single": float(popt_s[0]),
         "logg_single": float(popt_s[1]),
         "feh_single": float(popt_s[2]),
+        # binspec fits each component its own broadening (popt_b[5], popt_b[6])
+        "vmacro_single": float(popt_s[4]),
+        "vmacro_1": float(popt_b[5]) if len(popt_b) >= 9 else float(popt_s[4]),
+        "vmacro_2": float(popt_b[6]) if len(popt_b) >= 9 else float(popt_s[4]),
+        "labels_single": [float(x) for x in popt_s],
+        "labels_binary": [float(x) for x in popt_b],
     }
 
 
