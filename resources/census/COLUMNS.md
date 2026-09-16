@@ -71,6 +71,31 @@ SB2 catalog and its DR19 pipeline velocities change by more than 10 km/s over
 three or more visits. The first-revision definition used v1_range, which is
 zero for a single-star fit and was driven by the frame error above.
 
+## stage2_controls.csv and stage2_singles.csv — the multi-epoch fit on single-star samples
+
+The joint visit fit of the supplement, run with the same fitter and settings on two
+single-star samples, to measure its false-positive rate.
+
+stage2_controls.csv (1,643 rows, 1,293 with two or more usable visits): the benchmark
+controls with two or more visits. The single-star network of the visit fit
+(models/payne_dr19_sc.pt) was trained on the benchmark controls, so this is not a
+held-out test of that network; `in_sc_training` is 0 for the stars that the training
+rejected. `split` says whether the star was held out of the catalog network's
+training (`heldout`), in its training half (`training`), or in neither list.
+
+stage2_singles.csv (3,000 rows, 1,619 with two or more usable visits): dwarfs drawn at
+random (seed 20260916) from the 238,205 searched, outside the SB2 catalog, outside the
+network's training set, outside the sigma_v-triaged candidate list and outside the
+benchmark. This is the independent test. Rows with fewer than two usable visits
+carry no fit.
+
+Both carry the fit columns of stage2_catalog_full.csv plus `v_rad_std_pipeline`
+(standard deviation of the star's DR19 pipeline per-visit velocities) and, where the
+Gaia cross-match exists, `ruwe` and `gaia_nss`. The rates in the paper: 7.8% of the
+independent sample, 6.8% of its velocity-stable stars; 14.9% of the controls, 7.9% of
+the velocity-stable ones; 0.8% of the independent sample after requiring three or
+more epochs and a primary velocity change above 10 km/s (`scripts/stage2_fpr.py`).
+
 ## sb2_component_teff_open.csv
 
 Per-catalog-star component temperatures: primary teff1 from the single-star fit,
