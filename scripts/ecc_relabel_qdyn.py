@@ -10,9 +10,12 @@ moves less than the primary, so we use q_sym = min(q_dyn, 1/q_dyn); values at
 the fit bounds (0.1, 1.5) are left out. Everything else (sample cuts, matching,
 bootstrap, likelihood grid) is ecc_final_table.variant unchanged.
 
-Local only; reuses the per-system likelihoods in ecc_marginal_real.csv. Does not
-rerun the null or validation mocks, so no null-bias or slope correction is
-applied here. Prints a table and writes resources/census/ecc_variants_qdyn.csv.
+Local only; reuses the per-system likelihoods in ecc_marginal_real.csv, and also
+writes the relabelled copy ecc_marginal_real_qdyn.csv (usable q_dyn rows only).
+The null is rescored by ecc_null_relabel_qdyn.py, the validation is
+ecc_val_suite.py --twin-label qdyn, and ecc_headline.py combines the three.
+Prints the six matching variants of ecc_final_table.py for q_sym > 0.95 and > 0.90
+and writes resources/census/ecc_variants_qdyn.csv and ecc_variants_qdyn090.csv.
 """
 import os, sys
 import numpy as np, pandas as pd
@@ -38,16 +41,25 @@ print("K1>12 with usable q_dyn: %d (of 309)" % len(m))
 print("overlap of labels (K1>12): spec-twin & dyn-twin %d, spec-only %d, dyn-only %d"
       % (((m.twin_spec) & (m.q_sym > 0.95)).sum(), ((m.twin_spec) & ~(m.q_sym > 0.95)).sum(),
          (~(m.twin_spec) & (m.q_sym > 0.95)).sum()))
-V = []
-for thr in (0.95, 0.90):
-    for sub, cols, lab in [(m, ["K1", "n_ep"], "K1 + epochs"),
-                           (m, ["logP", "n_ep"], "period + epochs"),
-                           (d[d.dvmax > 25], ["n_ep", "baseline", "dvmax"], "observed only")]:
-        s = sub.copy(); s["twin"] = s.q_sym > thr
-        v = T.variant(s, cols, "q_dyn>%.2f, %s" % (thr, lab)); V.append(v)
-s = m.copy(); s["twin"] = s.twin_spec
-V.append(T.variant(s, ["K1", "n_ep"], "best_q>0.95 (published), same stars"))
-print("%-40s %7s %7s %5s %5s" % ("variant", "dAlpha", "boot", "N_t", "N_n"))
-for v in V:
-    print("%-40s %+7.3f %7.3f %5d %5d" % (v["label"], v["da"], v["boot"], v["n_t"], v["n_n"]))
-pd.DataFrame(V).to_csv(os.path.join(_R, "resources/census/ecc_variants_qdyn.csv"), index=False)
+def variants(thr):
+    """The six matching variants of ecc_final_table.py, with twins = q_sym > thr."""
+    lab = lambda s: s.assign(twin=s.q_sym > thr)
+    cat = pd.read_csv(os.path.join(_R, "resources/census/dr19_sb2_catalog_full.csv"))[["sdss_id", "prefers_binary"]]
+    mm = m.merge(cat, on="sdss_id", how="left")
+    return [T.variant(lab(m), ["K1", "n_ep"], "K1 + epochs (fiducial)"),
+            T.variant(lab(m), ["logP", "n_ep"], "period + epochs"),
+            T.variant(lab(m), ["logP", "n_ep", "K1"], "period + epochs + K1"),
+            T.variant(lab(d[(d.K1 > 12) & (d.P50 > 15)]), ["logP", "n_ep"], "period + epochs, P>15d"),
+            T.variant(lab(d[d.dvmax > 25]), ["n_ep", "baseline", "dvmax"], "observed only (no fitted vars)"),
+            T.variant(lab(mm[mm.prefers_binary == True]), ["K1", "n_ep"], "confident detections only")]
+
+for thr, name in ((0.95, "ecc_variants_qdyn.csv"), (0.90, "ecc_variants_qdyn090.csv")):
+    V = variants(thr)
+    print("twins q_sym > %.2f" % thr)
+    print("%-34s %7s %7s %5s %5s" % ("variant", "dAlpha", "boot", "N_t", "N_n"))
+    for v in V:
+        print("%-34s %+7.3f %7.3f %5d %5d" % (v["label"], v["da"], v["boot"], v["n_t"], v["n_n"]))
+    pd.DataFrame(V).to_csv(os.path.join(_R, "resources/census", name), index=False)
+
+out = d.drop(columns=["q_dyn", "q_dyn_at_bound", "baseline", "dvmax", "twin_spec", "q_sym"]).assign(twin=d.q_sym > 0.95)
+out.to_csv(os.path.join(_R, "resources/census/ecc_marginal_real_qdyn.csv"), index=False)
