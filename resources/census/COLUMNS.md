@@ -170,6 +170,7 @@ error), with the same meanings.
 | ecc_validation.csv | injection test: recovered against injected index difference, four inputs by four realizations |
 | ecc_null_dalpha.csv | injection null: recovered difference when the same index is injected into both classes at the real twin and non-twin sampling, 24 realizations |
 | ecc_variants.csv | the difference under each sample and matching choice, with bootstrap errors and sample sizes |
+| ecc_variants_qdyn.csv | the same comparison with twins defined by the dynamical mass ratio of stage2_deep.csv (min(q_dyn, 1/q_dyn) above 0.95 or 0.90) instead of best_q, plus the best_q labels on the same stars (`scripts/ecc_relabel_qdyn.py`); no null-bias correction is applied |
 | ecc_headline.json | the numbers quoted in the paper: fiducial difference, null bias and its error, matching spread, combined value and error, sample counts, and the 2-sigma upper bound of each variant |
 
 The estimator is `scripts/ecc_marginal.py` (per-system likelihood on a grid in
