@@ -30,6 +30,10 @@ ap.add_argument("--draws", type=int, default=60_000)   # per e-grid point
 ap.add_argument("--sigma", type=float, default=1.5)
 ap.add_argument("--method", choices=["twovel", "v1"], default="twovel")
 ap.add_argument("--out", required=True)
+ap.add_argument("--twin-label", choices=["best_q", "qdyn"], default="best_q",
+                help="best_q: twin = catalog best_q > 0.95 (the published split); "
+                     "qdyn: twin = min(q_dyn, 1/q_dyn) > 0.95 from the deep table, "
+                     "systems without a usable q_dyn left out of both pools")
 a = ap.parse_args()
 
 import deep_table as DT
@@ -48,8 +52,18 @@ if a.method == "twovel":
     _dq = _deep.merge(_cat, on="sdss_id", how="inner")
     _dq = _dq[_dq.best_q.notna()]
     _q = np.array([DT.q_twovel(r) for r in _dq.itertuples()])
-    _tw = (_dq.best_q > 0.95).values
-    QPOOL = {True: _q[_tw & np.isfinite(_q)], False: _q[~_tw & np.isfinite(_q)]}
+    if a.twin_label == "qdyn":
+        _qd = pd.to_numeric(_dq.q_dyn, errors="coerce").values
+        _ab = _dq.q_dyn_at_bound.astype(str).str.lower().eq("true").values
+        _ok = np.isfinite(_qd) & (_qd > 0.1) & (_qd < 1.5) & ~_ab
+        _qs = np.where(_ok, np.minimum(_qd, 1.0 / np.where(_ok, _qd, 1.0)), np.nan)
+        _tw = _ok & (_qs > 0.95)
+        _nt = _ok & ~(_qs > 0.95)
+    else:
+        _tw = (_dq.best_q > 0.95).values
+        _nt = ~_tw
+    QPOOL = {True: _q[_tw & np.isfinite(_q)], False: _q[_nt & np.isfinite(_q)]}
+    print("q pools (%s): twins %d, non-twins %d" % (a.twin_label, len(QPOOL[True]), len(QPOOL[False])), flush=True)
     assert len(QPOOL[True]) and len(QPOOL[False]), "empty twin or non-twin q pool"
 
 def draw_e(alpha, rng, n=1):
