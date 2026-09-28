@@ -170,7 +170,13 @@ error), with the same meanings.
 | ecc_validation.csv | injection test: recovered against injected index difference, four inputs by four realizations |
 | ecc_null_dalpha.csv | injection null: recovered difference when the same index is injected into both classes at the real twin and non-twin sampling, 24 realizations |
 | ecc_variants.csv | the difference under each sample and matching choice, with bootstrap errors and sample sizes |
-| ecc_variants_qdyn.csv | the same comparison with twins defined by the dynamical mass ratio of stage2_deep.csv (min(q_dyn, 1/q_dyn) above 0.95 or 0.90) instead of best_q, plus the best_q labels on the same stars (`scripts/ecc_relabel_qdyn.py`); no null-bias correction is applied |
+| ecc_variants_qdyn.csv | the six variants of ecc_variants.csv with twins defined by the dynamical mass ratio of stage2_deep.csv, min(q_dyn, 1/q_dyn) above 0.95, instead of best_q; systems with q_dyn missing or at a fit bound are left out (`scripts/ecc_relabel_qdyn.py`) |
+| ecc_variants_qdyn090.csv | the same with the threshold at 0.90 |
+| ecc_marginal_real_qdyn.csv | ecc_marginal_real.csv restricted to the 476 systems with a usable q_dyn, with `twin` set by min(q_dyn, 1/q_dyn) above 0.95 (written by `scripts/ecc_relabel_qdyn.py`) |
+| ecc_validation_qdyn.csv | injection test as in ecc_validation.csv, with the mock twin and non-twin mass ratios drawn from the q_dyn-labelled classes (`scripts/ecc_val_suite.py --twin-label qdyn`); ecc_val_qdyn_shards/ holds the 16 per-task outputs it was concatenated from |
+| ecc_null_full_qdyn.csv | the mocks of ecc_null_full.csv with `twin` replaced by the q_dyn label, systems without a usable q_dyn dropped (`scripts/ecc_null_relabel_qdyn.py`) |
+| ecc_null_dalpha_qdyn.csv | injection null as in ecc_null_dalpha.csv, scored from ecc_null_full_qdyn.csv |
+| ecc_headline_qdyn.json | the fields of ecc_headline.json for the q_dyn labels, from `scripts/ecc_headline.py` with ecc_variants_qdyn.csv, ecc_null_full_qdyn.csv, ecc_marginal_real_qdyn.csv and ecc_validation_qdyn.csv as inputs |
 | ecc_headline.json | the numbers quoted in the paper: fiducial difference, null bias and its error, matching spread, combined value and error, sample counts, and the 2-sigma upper bound of each variant |
 
 The estimator is `scripts/ecc_marginal.py` (per-system likelihood on a grid in
