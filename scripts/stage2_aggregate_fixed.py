@@ -64,7 +64,9 @@ for s, r in rows.items():
     # q_dyn means something only for a system the visit fit confirms. A fit that
     # falls back to the single-star solution sets q to one, which in the first
     # revision showed up as a large spurious group at q_dyn = 1.
-    if not binary:
+    # A primary that does not move (span below 1 km/s) gives no velocity amplitude
+    # to take a ratio of, so q_dyn is blank there too (1,920 confirmed rows).
+    if not binary or span < 1.0:
         rec["q_dyn"] = ""
         rec["q_dyn_at_bound"] = ""
     out.append(rec)

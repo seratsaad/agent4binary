@@ -50,7 +50,7 @@ keep their Gaia identifier, position and DR19 pipeline velocities.
 | f_imp | — | improvement fraction of the joint fit |
 | prefers_binary | bool | joint fit prefers the two-component model |
 | q_spec | — | mass ratio from the joint spectral fit |
-| q_dyn | — | dynamical mass ratio from the per-visit velocity amplitudes; blank unless the joint fit prefers two components and there are three or more visits. A fit that falls back to the single-star solution sets q to one, which is why the first-revision table had a large group at exactly 1 |
+| q_dyn | — | dynamical mass ratio from the per-visit velocity amplitudes; blank unless the joint fit prefers two components, there are three or more visits, and the primary velocity changes by at least 1 km/s (the 1,920 confirmed systems whose primary does not move have no velocity amplitude to take a ratio of). A fit that falls back to the single-star solution sets q to one, which is why the first-revision table had a large group at exactly 1 |
 | q_dyn_at_bound | bool | q_dyn sits at an edge of the allowed range (0.1 or 1.5), so it is not constrained |
 | v_single | km/s | barycentric velocity of the single-star model, one value for all visits |
 | gamma | km/s | systemic velocity |
