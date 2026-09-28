@@ -96,6 +96,23 @@ independent sample, 6.8% of its velocity-stable stars; 14.9% of the controls, 7.
 the velocity-stable ones; 0.8% of the independent sample after requiring three or
 more epochs and a primary velocity change above 10 km/s (`scripts/stage2_fpr.py`).
 
+## stage2_singles_astra_rv.csv — pipeline velocities of the random single-star sample (3,000 rows)
+
+The SB1 selection of the supplement (DR19 pipeline velocity changing by more than
+10 km/s over three or more visits) applied to the 3,000 random dwarfs of
+stage2_singles.csv, using only the pipeline per-visit velocities
+(`scripts/stage2_singles_pipeline_rv.py`). Of the 1,387 with three or more visits,
+16 (1.2%) pass the cut, which is the false-positive rate of the SB1 flag.
+
+| column | unit | description |
+|---|---|---|
+| sdss_id | — | SDSS-V identifier |
+| n_visits_rv | — | number of usable visits (same visit rule as the visit fit) |
+| dv_rad_max | km/s | largest minus smallest pipeline velocity over the visits |
+| v_rad_std | km/s | standard deviation of the pipeline velocities |
+| mjd_span | d | time between the first and last usable visit |
+| error | — | no_visit_file, no_usable_visit or fetch_failed; blank otherwise |
+
 ## sb2_component_teff_open.csv
 
 Per-catalog-star component temperatures: primary teff1 from the single-star fit,
@@ -214,3 +231,19 @@ preliminary binary pass had already removed 62 of them. Of the rest, 28 entered
 the training set of the catalog network (0.78% of it) and 35 fall in the
 held-out controls (0.97%), where dropping them moves the false-positive rate
 from 8.1% to about 7.8%.
+
+## kounkel_overlap.csv — the catalog against Kounkel et al. (2021) (41,290 rows)
+
+One row per catalog star with a position (`scripts/kounkel_overlap.py`). Kounkel et
+al. (2021, J/AJ/162/184) searched the APOGEE DR16/17 spectra, so the fair
+denominator is the catalog stars that DR17 observed. Of the 29,233 such stars,
+3,244 (11%) are in the Kounkel SB2 table.
+
+| column | unit | description |
+|---|---|---|
+| sdss_id | — | SDSS-V identifier |
+| ra, dec | deg | catalog position |
+| in_dr17 | bool | matched to the APOGEE DR17 allStar table (III/286) within 3 arcsec |
+| in_kounkel21 | bool | matched to Kounkel et al. (2021) table1 within 3 arcsec |
+| kounkel_sbn | — | number of components Kounkel lists (2, 3 or 4); blank without a match |
+| sep_kms | km/s | coadd separation abs(best_rv1 - best_rv2) from our fit |
