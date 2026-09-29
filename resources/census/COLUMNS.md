@@ -98,11 +98,12 @@ more epochs and a primary velocity change above 10 km/s (`scripts/stage2_fpr.py`
 
 ## stage2_singles_astra_rv.csv — pipeline velocities of the random single-star sample (3,000 rows)
 
-The SB1 selection of the supplement (DR19 pipeline velocity changing by more than
-10 km/s over three or more visits) applied to the 3,000 random dwarfs of
+The SB1 selection of the supplement applied to the 3,000 random dwarfs of
 stage2_singles.csv, using only the pipeline per-visit velocities
 (`scripts/stage2_singles_pipeline_rv.py`). Of the 1,387 with three or more visits,
-16 (1.2%) pass the cut, which is the false-positive rate of the SB1 flag.
+13 (0.9%) pass the cut (visits above 400 km/s left out, change above 10 and at most
+480 km/s), which is the false-positive rate of the SB1 flag; 16 (1.2%) pass the
+change cut on all visits.
 
 | column | unit | description |
 |---|---|---|
@@ -111,6 +112,7 @@ stage2_singles.csv, using only the pipeline per-visit velocities
 | dv_rad_max | km/s | largest minus smallest pipeline velocity over the visits |
 | v_rad_std | km/s | standard deviation of the pipeline velocities |
 | mjd_span | d | time between the first and last usable visit |
+| n_visits_rv_ok, dv_rad_max_ok | —, km/s | the same count and largest change over the visits with pipeline velocity at most 400 km/s in absolute value |
 | error | — | no_visit_file, no_usable_visit or fetch_failed; blank otherwise |
 
 ## sb2_component_teff_open.csv
