@@ -2801,6 +2801,11 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             snr = float(np.median((f * np.sqrt(iv))[good]))
         if not np.isfinite(snr) or snr < snr_min:
             continue
+        # A rest-frame visit with no pipeline velocity cannot be put in the
+        # barycentric frame; fitting it unshifted would add a spurious velocity
+        # jump against the other visits, so it is left out.
+        if input_frame == "rest" and not np.isfinite(vh):
+            continue
         # Frame shift on the raw flux/ivar BEFORE normalization, so the per-chip
         # continuum is fit on the shifted spectrum exactly as for a coadd.
         f0, iv0 = f, iv
@@ -2818,6 +2823,8 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
         for k, (f, iv, vh, snr_meta, bc) in enumerate(raw):
             good = np.isfinite(f) & np.isfinite(iv) & (iv > 0)
             if not np.any(good):
+                continue
+            if input_frame == "rest" and not np.isfinite(vh):
                 continue
             snr = (snr_meta if (np.isfinite(snr_meta) and snr_meta > 0)
                    else float(np.median((f * np.sqrt(iv))[good])))

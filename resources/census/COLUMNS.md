@@ -33,8 +33,10 @@ mwmVisit spectra arrive shifted to each star's rest frame with the removed
 velocity stored as v_rad, and the fit adds it back. The first-revision table
 applied the barycentric correction to spectra that were already corrected, so
 its per-visit velocities equalled minus the barycentric correction, and it
-listed them in signal-to-noise order without their dates. That version is kept
-as stage2_catalog_full_legacy.csv for reference only.
+listed them in signal-to-noise order without their dates. That version is in the
+git history of this file (commit 550000d) for reference only. Visits without a
+pipeline velocity cannot be put in the barycentric frame and are left out of the
+fit (141 stars had such a visit in the first second-revision run and were refit).
 
 In the second revision only the 26,239 catalog SB2 with two or more usable visits
 were refit, since they carry every multi-epoch result in the paper. The other rows
@@ -56,19 +58,25 @@ keep their Gaia identifier, position and DR19 pipeline velocities.
 | gamma | km/s | systemic velocity |
 | v1_range | km/s | maximum primary velocity change across visits |
 | v1_per_visit, v2_per_visit | km/s | semicolon-separated per-visit component velocities, barycentric |
-| mjd_per_visit, visit_index_per_visit | day, — | the date and mwmVisit row of each velocity, in the same order |
+| mjd_per_visit, visit_index_per_visit | day, — | the date and mwmVisit row of each velocity, in the same order. The date is the integer MJD of the observing night carried by mwmVisit, not the mid-exposure time; for periods of a few days and longer the difference is a small fraction of the phase |
 | rv1_untied_per_visit, rv2_untied_per_visit | km/s | component velocities from each visit's own two-component fit, with no momentum tie; the two may be exchanged from visit to visit |
-| q_wilson | — | mass ratio from the slope of the untied velocities against each other (Wilson plot), for confirmed SB2 with three or more visits and a primary span above 10 km/s |
+| q_wilson | — | mass ratio from the slope of the untied velocities against each other (Wilson plot), given only where q_dyn is given and only between 0.05 and 3 (3,231 rows); the untied primary velocities must span more than 10 km/s. At each visit the untied pair is oriented so that the component closer to the fitted primary velocity (v1_per_visit) is the primary, and q_wilson is -1/slope of the oriented secondary against the oriented primary; the span is that of the oriented primary. Outside 0.05-3 the slope is not constrained (values reached several hundred) |
 | refit | bool | refit in the second revision; rows with refit false keep their identifiers, positions and pipeline velocities but no fit values |
 | n_visits_rv, dv_rad_max_astra | —, km/s | number of visits with a DR19 pipeline velocity, and the largest change among them |
-| v_rad_median_astra, v_rad_std_astra | km/s | median and standard deviation of the DR19 pipeline per-visit velocities (single-star fits); filled for every row, including those not refit |
+| dv_rad_max_astra_ok | km/s | largest change among the pipeline velocities at most 400 km/s in absolute value; larger values are failures of the pipeline's velocity fit (dv_rad_max_astra reaches about 2,000 km/s). Used for sb1 |
+| n_visits_rv_ok | — | number of pipeline velocities at most 400 km/s in absolute value; sb1 needs three or more |
+| v_rad_median_astra, v_rad_std_astra | km/s | median and standard deviation of the DR19 pipeline per-visit velocities (single-star fits); filled for every row with a pipeline velocity (blank for 101 rows without one), including those not refit |
 | sb1 | bool | single-lined velocity variable, defined below |
 | v1_span_gt20 | bool | in the SB2 catalog, confirmed by the visit fit (prefers_binary), three or more visits, primary velocity spanning more than 20 km/s (3,115 rows); called orbit_ready before the second revision |
 | error | — | non-empty if the fit failed |
 
 A star is a single-lined velocity variable (SB1 candidate) when it is not in the
-SB2 catalog and its DR19 pipeline velocities change by more than 10 km/s over
-three or more visits. The first-revision definition used v1_range, which is
+SB2 catalog and its DR19 pipeline velocities change by more than 10 km/s and at most
+480 km/s over three or more visits, leaving out visits whose pipeline velocity is above
+400 km/s in absolute value (3,943 rows). Those visits are failures of the pipeline's
+velocity fit; 480 km/s is about the largest primary velocity change a main-sequence
+pair gives (two 1.4 Msun stars on a 6 hr orbit). Before this cut the flag held 4,089
+rows, 180 of them with changes above 500 km/s. The first-revision definition used v1_range, which is
 zero for a single-star fit and was driven by the frame error above.
 
 ## stage2_controls.csv and stage2_singles.csv — the multi-epoch fit on single-star samples

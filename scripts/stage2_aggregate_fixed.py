@@ -15,8 +15,8 @@ Definitions follow the paper. Confirmation: a catalog SB2 with two or more epoch
 whose joint visit fit prefers two components. v1_span_gt20 (called orbit_ready
 before the second revision): a catalog SB2 confirmed by the visit fit, with three or
 more epochs whose primary velocity spans more than 20 km/s. SB1: a star outside
-the catalog whose Astra per-visit velocities change by more than 10 km/s over three
-or more visits. The legacy SB1 selection used the fitted primary velocity, which is
+the catalog whose Astra per-visit velocities, leaving out visits above 400 km/s in
+absolute value, change by more than 10 and at most 480 km/s over three or more visits. The legacy SB1 selection used the fitted primary velocity, which is
 constant for a single-star fit and so cannot identify a single-lined variable.
 """
 import csv, glob, os, shutil, sys
@@ -34,6 +34,11 @@ for f in sorted(glob.glob(C(SHARDS + "/shard_*.csv"))):
         rows[r["sdss_id"].split(".")[0]] = r
 if not rows:
     sys.exit("no corrected shards found")
+# Stars refit later (A4B_S2_OVERRIDE, e.g. stage2_framefix_shards: the 141 whose
+# fitted visits included one with no pipeline velocity) replace their rows.
+for f in sorted(glob.glob(C(os.environ.get("A4B_S2_OVERRIDE", "__none__") + "/shard_*.csv"))):
+    for r in csv.DictReader(open(f)):
+        rows[r["sdss_id"].split(".")[0]] = r
 cat = {r["sdss_id"].split(".")[0]: r for r in csv.DictReader(open(C("dr19_sb2_catalog_open.csv")))}
 gaia = {r["sdss_id"]: r for r in csv.DictReader(open(C("stage2_gaia_coords.csv")))}
 arv = {r["sdss_id"]: r for r in csv.DictReader(open(C("stage2_astra_rv.csv")))}
@@ -52,15 +57,23 @@ for s, r in rows.items():
     a = arv.get(s, {})
     n_rv = int(F(a.get("n_visits_rv")) or 0) if a.get("n_visits_rv") not in ("", None) else 0
     dvr = F(a.get("dv_rad_max"))
+    # SB1 uses only the visits whose pipeline velocity is at most 400 km/s in
+    # absolute value (larger values are failures of the pipeline's velocity fit,
+    # up to +-1000 km/s), and a change of at most 480 km/s, about the largest a
+    # main-sequence pair can give (two 1.4 Msun stars on a 6 hr orbit).
+    n_ok = int(F(a.get("n_visits_rv_ok")) or 0) if a.get("n_visits_rv_ok") not in ("", None) else 0
+    dv_ok = F(a.get("dv_rad_max_ok"))
     g = gaia.get(s, {})
     rec = dict(r)
     rec.update(refit=r.get("error") != "not refit in the second revision",
                gaia_dr3_source_id=g.get("gaia_dr3_source_id", ""), ra=g.get("ra", ""), dec=g.get("dec", ""),
                in_sb2_catalog=in_cat, n_visits_rv=n_rv,
                dv_rad_max_astra="" if not np.isfinite(dvr) else "%.3f" % dvr,
+               n_visits_rv_ok=n_ok,
+               dv_rad_max_astra_ok="" if not np.isfinite(dv_ok) else "%.3f" % dv_ok,
                v_rad_median_astra=a.get("v_rad_median", ""), v_rad_std_astra=a.get("v_rad_std", ""),
                v1_span_gt20=bool(in_cat and binary and nv >= 3 and span > 20.0),
-               sb1=bool((not in_cat) and n_rv >= 3 and np.isfinite(dvr) and dvr > 10.0))
+               sb1=bool((not in_cat) and n_ok >= 3 and np.isfinite(dv_ok) and 10.0 < dv_ok <= 480.0))
     # q_dyn means something only for a system the visit fit confirms. A fit that
     # falls back to the single-star solution sets q to one, which in the first
     # revision showed up as a large spurious group at q_dyn = 1.
@@ -92,7 +105,7 @@ print("median primary-velocity change across visits: %.1f km/s" % np.median(span
 print("catalog SB2 with >= 3 epochs (Figure 14 sample): %d" % sum(int(F(o["n_visits"])) >= 3 for o in multi))
 print("v1_span_gt20 (>= 3 epochs, primary span > 20 km/s): %d | of these confirmed: %d"
       % (sum(o["v1_span_gt20"] for o in out), sum(o["v1_span_gt20"] and o["prefers_binary"] == "True" for o in out)))
-print("SB1 from Astra velocities (outside catalog, >= 3 visits, dv_rad > 10 km/s): %d" % sum(o["sb1"] for o in out))
+print("SB1 from Astra velocities (outside catalog, >= 3 visits with |v| <= 400, 10 < dv <= 480 km/s): %d" % sum(o["sb1"] for o in out))
 
 # point 3: near-equal twins that the combined spectrum flags but the visits do not
 tw = [o for o in multi if F(cat[o["sdss_id"].split(".")[0]]["best_q"]) >= 0.95]
@@ -142,8 +155,13 @@ if len(wq):
         print("independent Wilson q vs %-26s n=%d  Spearman %.3f  median |dq| %.3f"
               % (lab, m.sum(), np.corrcoef(rk(wq[m, 0]), rk(wq[m, j]))[0, 1], np.median(np.abs(wq[m, 0] - wq[m, j]))))
 for o in out:
-    o["q_wilson"] = ("%.3f" % wilson_q(o)) if (o.get("prefers_binary") == "True" and o["in_sb2_catalog"]
-                                              and np.isfinite(wilson_q(o))) else ""
+    # Kept only where q_dyn exists (confirmed, three or more visits, primary moving
+    # by at least 1 km/s) and inside 0.05-3; outside that range the slope is
+    # unconstrained (values reached several hundred).
+    ok = (o.get("prefers_binary") == "True" and o["in_sb2_catalog"]
+          and o.get("q_dyn") not in ("", None) and np.isfinite(F(o.get("q_dyn"))))
+    qw = wilson_q(o) if ok else np.nan
+    o["q_wilson"] = ("%.3f" % qw) if (np.isfinite(qw) and 0.05 < qw < 3.0) else ""
 
 # ---------------------------------------------------------------- write
 legacy = C("stage2_catalog_full_legacy.csv")
@@ -153,7 +171,7 @@ cols = ["sdss_id", "gaia_dr3_source_id", "ra", "dec", "in_sb2_catalog", "n_visit
         "prefers_binary", "q_spec", "q_dyn", "q_dyn_at_bound", "v_single", "gamma", "v1_range",
         "v1_per_visit", "v2_per_visit", "mjd_per_visit", "visit_index_per_visit",
         "rv1_untied_per_visit", "rv2_untied_per_visit", "q_wilson", "refit", "n_visits_rv",
-        "v_rad_median_astra", "v_rad_std_astra", "dv_rad_max_astra", "sb1", "v1_span_gt20", "error"]
+        "v_rad_median_astra", "v_rad_std_astra", "dv_rad_max_astra", "n_visits_rv_ok", "dv_rad_max_astra_ok", "sb1", "v1_span_gt20", "error"]
 with open(C("stage2_catalog_full.csv"), "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore"); w.writeheader(); w.writerows(out)
 with open(C("stage2_mjds.csv"), "w", newline="") as fh:
