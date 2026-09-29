@@ -8,11 +8,11 @@
 | gaia_dr3_source_id | — | Gaia DR3 identifier, taken as an exact string from the census input table and checked against Gaia DR3 through VizieR (I/355/gaiadr3): the source exists and lies within 2 arcsec of the APOGEE position. Blank for the 601 stars that fail the check. The first-revision release stored this column through a floating-point conversion that rounds identifiers above 2^53, so about half of those values pointed to no Gaia source |
 | ra, dec | deg | J2000 coordinates (ICRS) from the APOGEE input table; blank for 176 stars |
 | teff_seed, logg_seed, feh_seed | K, dex, dex | pipeline labels used to seed the fit |
-| verdict | — | classifier verdict string |
-| prefers_binary | bool | two-component fit beats the single-star fit |
+| verdict | — | classifier verdict string on the published Table B1 ladder, without the 0.90 recalibration; 4,702 catalog rows read SINGLE here although they pass the recalibrated gate (the `sb2` column) |
+| prefers_binary | bool | two-component fit beats the single-star fit on the unscaled ladder (see verdict); use `sb2` for catalog membership |
 | delta_chi2 | — | chi2(single) − chi2(binary) |
 | f_imp | — | improvement fraction (El-Badry et al. 2018, Eq. B1) |
-| min_fimp_required | — | the Table B1 rung the star had to clear |
+| min_fimp_required | — | the Table B1 rung at the unscaled delta_chi2 (with the 0.14 floor). The catalog gate compares f_imp/0.90 with the rung at delta_chi2/0.90, so f_imp can sit below this value in an accepted row |
 | best_q | — | mass ratio of the two-component model fitted to the combined spectrum. It is a parameter of the composite model (the flux ratio mapped onto mass through one 4 Gyr isochrone), not a measured mass ratio; where the visits allow, use q_dyn or q_wilson of the multi-epoch supplement |
 | best_rv1, best_rv2 | km/s | component velocities in the combined spectrum, relative to the DR19 pipeline rest frame of the coadd |
 | teff_single, logg_single, feh_single | K, dex, dex | best single-star fit labels |
@@ -21,8 +21,8 @@
 | teff_floor | flag | 1 if the seed temperature sits at the 4200 K lower edge of the model grid, where the single-star labels are unreliable; cut on this for a clean sample |
 | feh_metalpoor | flag | 1 if the pipeline [Fe/H] < -0.9, where the control false-positive rate is 38% against 14% for the rest |
 | coadd_only | flag | 1 if the coadd shows a split the visits do not: two or more fitted visits in the multi-epoch supplement, abs(best_rv1 - best_rv2) > 15 km/s, DR19 pipeline velocity standard deviation < 1 km/s, and a visit fit that prefers one star. A pair that far apart would show two sets of lines in every visit, and the visit fit prefers two stars for 92-95% of the published SB2 at every coadd separation. 2,236 rows (8.5% of the 26,239 with two or more fitted visits; 1.4% of the published SB2); 941 of them are metal-poor. Replaces the second-revision coadd_symmetric flag (abs(best_rv1 + best_rv2) <= 2 km/s), which also marked real twins |
-| vmacro_single | km/s | macroturbulent velocity of our single-star fit, from the seeded refit (`vmacro_refit_*.csv`) with the catalog's fitting layer and network |
-| vmacro_1, vmacro_2 | km/s | macroturbulent velocity of each component in our two-component fit |
+| vmacro_single | km/s | macroturbulent velocity of our single-star fit, from the seeded refit (`vmacro_refit_*.csv`) with the catalog's fitting layer and network. The seeded refit can settle in a different minimum from the census fit that gave best_q, best_rv1, best_rv2, delta_chi2 and f_imp; its q changes by more than 0.1 for 6.4% of rows and 2,647 rows (6.4%) fall below the recalibrated gate in the refit |
+| vmacro_1, vmacro_2 | km/s | macroturbulent velocity of each component in the two-component fit of the same seeded refit (not of the census fit behind best_q). Values run to the fit bound of 45 km/s, beyond the 30 km/s edge of the network's training range, for about 4,000 rows each |
 | vmacro_at_edge | flag | 1 if vmacro_single >= 30 km/s, the edge of the network's training range; above it the model no longer changes, so the value is a lower bound |
 | v_macro_pipeline | km/s | the DR19 pipeline's own single-star v_macro (The Payne). The first-revision release called this column v_macro and described it as ours, which it was not |
 
