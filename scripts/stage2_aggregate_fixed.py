@@ -12,9 +12,9 @@ Outputs
   resources/census/stage2_mjds.csv           epochs in the order of v1_per_visit
 
 Definitions follow the paper. Confirmation: a catalog SB2 with two or more epochs
-whose joint visit fit prefers two components. Orbit-ready: a catalog SB2 confirmed
-by the visit fit, with three or more epochs whose primary velocity spans more than
-20 km/s. SB1: a star outside
+whose joint visit fit prefers two components. v1_span_gt20 (called orbit_ready
+before the second revision): a catalog SB2 confirmed by the visit fit, with three or
+more epochs whose primary velocity spans more than 20 km/s. SB1: a star outside
 the catalog whose Astra per-visit velocities change by more than 10 km/s over three
 or more visits. The legacy SB1 selection used the fitted primary velocity, which is
 constant for a single-star fit and so cannot identify a single-lined variable.
@@ -59,7 +59,7 @@ for s, r in rows.items():
                in_sb2_catalog=in_cat, n_visits_rv=n_rv,
                dv_rad_max_astra="" if not np.isfinite(dvr) else "%.3f" % dvr,
                v_rad_median_astra=a.get("v_rad_median", ""), v_rad_std_astra=a.get("v_rad_std", ""),
-               orbit_ready=bool(in_cat and binary and nv >= 3 and span > 20.0),
+               v1_span_gt20=bool(in_cat and binary and nv >= 3 and span > 20.0),
                sb1=bool((not in_cat) and n_rv >= 3 and np.isfinite(dvr) and dvr > 10.0))
     # q_dyn means something only for a system the visit fit confirms. A fit that
     # falls back to the single-star solution sets q to one, which in the first
@@ -69,6 +69,11 @@ for s, r in rows.items():
     if not binary or span < 1.0:
         rec["q_dyn"] = ""
         rec["q_dyn_at_bound"] = ""
+    else:
+        # The allowed range is 0.1-1.5. Values within 0.05 of either edge pile up
+        # against it (the fit is not constrained there), so they are flagged too.
+        qv = F(rec.get("q_dyn"))
+        rec["q_dyn_at_bound"] = "" if not np.isfinite(qv) else bool(qv < 0.15 or qv > 1.45)
     out.append(rec)
 
 # ---------------------------------------------------------------- statistics
@@ -85,8 +90,8 @@ for lo, hi, lab in ((2, 2, "2"), (3, 3, "3"), (4, 5, "4-5"), (6, 8, "6-8")):
 spans = np.array([np.ptp(series(o["v1_per_visit"])) for o in multi if series(o["v1_per_visit"]).size >= 2])
 print("median primary-velocity change across visits: %.1f km/s" % np.median(spans))
 print("catalog SB2 with >= 3 epochs (Figure 14 sample): %d" % sum(int(F(o["n_visits"])) >= 3 for o in multi))
-print("orbit-ready (>= 3 epochs, primary span > 20 km/s): %d | of these confirmed: %d"
-      % (sum(o["orbit_ready"] for o in out), sum(o["orbit_ready"] and o["prefers_binary"] == "True" for o in out)))
+print("v1_span_gt20 (>= 3 epochs, primary span > 20 km/s): %d | of these confirmed: %d"
+      % (sum(o["v1_span_gt20"] for o in out), sum(o["v1_span_gt20"] and o["prefers_binary"] == "True" for o in out)))
 print("SB1 from Astra velocities (outside catalog, >= 3 visits, dv_rad > 10 km/s): %d" % sum(o["sb1"] for o in out))
 
 # point 3: near-equal twins that the combined spectrum flags but the visits do not
@@ -108,7 +113,7 @@ for s in ("61585132", "76096409"):
 
 # point 4b: dynamical against spectroscopic mass ratio where q_dyn is constrained
 qd = [(F(o["q_dyn"]), F(cat[o["sdss_id"]]["best_q"])) for o in multi
-      if o["prefers_binary"] == "True" and int(F(o["n_visits"])) >= 3 and o.get("q_dyn_at_bound") != "True" and np.isfinite(F(o["q_dyn"]))]
+      if o["prefers_binary"] == "True" and int(F(o["n_visits"])) >= 3 and str(o.get("q_dyn_at_bound")) != "True" and np.isfinite(F(o["q_dyn"]))]
 if qd:
     q = np.array(qd)
     print("q_dyn vs q_spec (confirmed, >= 3 epochs, off the bounds): n=%d  Spearman %.3f  median |dq| %.3f"
@@ -148,7 +153,7 @@ cols = ["sdss_id", "gaia_dr3_source_id", "ra", "dec", "in_sb2_catalog", "n_visit
         "prefers_binary", "q_spec", "q_dyn", "q_dyn_at_bound", "v_single", "gamma", "v1_range",
         "v1_per_visit", "v2_per_visit", "mjd_per_visit", "visit_index_per_visit",
         "rv1_untied_per_visit", "rv2_untied_per_visit", "q_wilson", "refit", "n_visits_rv",
-        "v_rad_median_astra", "v_rad_std_astra", "dv_rad_max_astra", "sb1", "orbit_ready", "error"]
+        "v_rad_median_astra", "v_rad_std_astra", "dv_rad_max_astra", "sb1", "v1_span_gt20", "error"]
 with open(C("stage2_catalog_full.csv"), "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore"); w.writeheader(); w.writerows(out)
 with open(C("stage2_mjds.csv"), "w", newline="") as fh:

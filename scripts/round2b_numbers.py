@@ -30,7 +30,7 @@ kou = set(ext[ext.in_kounkel21.fillna(0) > 0].sdss_id)
 kov = set(ext[(ext[["in_kovalev22", "in_kovalev24"]].fillna(0) > 0).any(axis=1)].sdss_id)
 
 m = cat.merge(s2[["sdss_id", "n_visits", "prefers_binary", "v_rad_std_astra", "v1_range",
-                  "q_dyn", "q_dyn_at_bound", "q_wilson", "orbit_ready", "v1_per_visit",
+                  "q_dyn", "q_dyn_at_bound", "q_wilson", "v1_span_gt20", "v1_per_visit",
                   "v2_per_visit"]].rename(columns={"prefers_binary": "conf"}),
               on="sdss_id", how="left")
 m["pub"] = m.sdss_id.isin(pub)
@@ -91,7 +91,7 @@ old = c3[c3.q_dyn.notna() & (c3.q_dyn_at_bound != True)]
 print("  (old, all confirmed >=3 ep: inside range %d, median %.2f)" % (len(old), old.q_dyn.median()))
 
 print("== orbit-ready")
-o = m[m.orbit_ready == True]
+o = m[m.v1_span_gt20 == True]
 split = []
 for v1, v2 in zip(o.v1_per_visit, o.v2_per_visit):
     a = np.array(str(v1).split(";"), float) - np.array(str(v2).split(";"), float)

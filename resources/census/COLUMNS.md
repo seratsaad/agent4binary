@@ -51,7 +51,7 @@ keep their Gaia identifier, position and DR19 pipeline velocities.
 | prefers_binary | bool | joint fit prefers the two-component model |
 | q_spec | — | mass ratio from the joint spectral fit |
 | q_dyn | — | dynamical mass ratio from the per-visit velocity amplitudes; blank unless the joint fit prefers two components, there are three or more visits, and the primary velocity changes by at least 1 km/s (the 1,920 confirmed systems whose primary does not move have no velocity amplitude to take a ratio of). A fit that falls back to the single-star solution sets q to one, which is why the first-revision table had a large group at exactly 1 |
-| q_dyn_at_bound | bool | q_dyn sits at an edge of the allowed range (0.1 or 1.5), so it is not constrained |
+| q_dyn_at_bound | bool | q_dyn lies within 0.05 of an edge of the allowed range 0.1-1.5 (below 0.15 or above 1.45), where values pile up against the edge and are not constrained (586 of 6,490, 9.0%) |
 | v_single | km/s | barycentric velocity of the single-star model, one value for all visits |
 | gamma | km/s | systemic velocity |
 | v1_range | km/s | maximum primary velocity change across visits |
@@ -63,7 +63,7 @@ keep their Gaia identifier, position and DR19 pipeline velocities.
 | n_visits_rv, dv_rad_max_astra | —, km/s | number of visits with a DR19 pipeline velocity, and the largest change among them |
 | v_rad_median_astra, v_rad_std_astra | km/s | median and standard deviation of the DR19 pipeline per-visit velocities (single-star fits); filled for every row, including those not refit |
 | sb1 | bool | single-lined velocity variable, defined below |
-| orbit_ready | bool | in the SB2 catalog, confirmed by the visit fit (prefers_binary), three or more visits, primary velocity spanning more than 20 km/s |
+| v1_span_gt20 | bool | in the SB2 catalog, confirmed by the visit fit (prefers_binary), three or more visits, primary velocity spanning more than 20 km/s (3,115 rows); called orbit_ready before the second revision |
 | error | — | non-empty if the fit failed |
 
 A star is a single-lined velocity variable (SB1 candidate) when it is not in the
@@ -160,7 +160,7 @@ that have at least eight usable visits. Its columns are the fit columns of
 stage2_catalog_full.csv (n_visits, delta_chi2, f_imp, prefers_binary, q_spec,
 q_dyn, q_dyn_at_bound, v_single, gamma, v1_range, v1_per_visit, v2_per_visit,
 visit_index_per_visit, mjd_per_visit, rv1_untied_per_visit, rv2_untied_per_visit,
-error), with the same meanings.
+error), with the same meanings, except that q_dyn_at_bound there marks only values at the edges themselves (0.1 or 1.5).
 
 ## Eccentricity comparison products
 
