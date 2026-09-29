@@ -89,15 +89,18 @@ controls with two or more visits. The single-star network of the visit fit
 (models/payne_dr19_sc.pt) was trained on the benchmark controls, so this is not a
 held-out test of that network; `in_sc_training` is 0 for the stars that the training
 rejected. `split` says whether the star was held out of the catalog network's
-training (`heldout`), in its training half (`training`), or in neither list.
+training (`heldout`), in its training half (`training`), or in neither list; it is blank in stage2_singles.csv.
 
 stage2_singles.csv (3,000 rows, 1,619 with two or more usable visits): dwarfs drawn at
 random (seed 20260916) from the 238,205 searched, outside the SB2 catalog, outside the
 network's training set, outside the sigma_v-triaged candidate list and outside the
-benchmark. This is the independent test. Rows with fewer than two usable visits
-carry no fit.
+benchmark. This is the independent test. In both tables rows with fewer than two
+usable visits carry no fit values, and q_dyn is given only where the fit prefers two
+components over three or more visits and the primary moves by at least 1 km/s, as in
+stage2_catalog_full.csv.
 
-Both carry the fit columns of stage2_catalog_full.csv plus `v_rad_std_pipeline`
+Both carry the main fit columns of stage2_catalog_full.csv (not q_dyn_at_bound, q_wilson or
+visit_index_per_visit) plus `v_rad_std_pipeline`
 (standard deviation of the star's DR19 pipeline per-visit velocities) and, where the
 Gaia cross-match exists, `ruwe` and `gaia_nss`. The rates in the paper: 7.8% of the
 independent sample, 6.8% of its velocity-stable stars; 14.9% of the controls, 7.9% of

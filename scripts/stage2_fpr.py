@@ -86,6 +86,16 @@ for r in rows:
     r["v_rad_std_pipeline"] = "%.3f" % vsd[s] if s in vsd and np.isfinite(vsd[s]) else ""
     g = gaia.get(s, (np.nan, np.nan)); r["ruwe"] = "%.3f" % g[0] if np.isfinite(g[0]) else ""; r["gaia_nss"] = "%d" % g[1] if np.isfinite(g[1]) else ""
     r["in_sc_training"] = int(s not in rej) if sample == "controls" else 0
+    # Same release rules as stage2_catalog_full.csv: no fit values for rows with
+    # fewer than two usable visits, and q_dyn only where the fit prefers two stars
+    # over three or more visits and the primary moves by at least 1 km/s.
+    nvr = F(r.get("n_visits"))
+    if not (np.isfinite(nvr) and nvr >= 2) or r.get("error"):
+        for k in ("delta_chi2", "f_imp", "prefers_binary", "q_spec", "q_dyn", "v_single", "gamma", "v1_range",
+                  "v1_per_visit", "v2_per_visit", "mjd_per_visit", "rv1_untied_per_visit", "rv2_untied_per_visit"):
+            r[k] = ""
+    elif not (r.get("prefers_binary") == "True" and nvr >= 3 and F(r.get("v1_range")) >= 1.0):
+        r["q_dyn"] = ""
 with open(C("stage2_%s.csv" % sample), "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore"); w.writeheader(); w.writerows(rows)
 print("wrote stage2_%s.csv (%d rows)" % (sample, len(rows)))
