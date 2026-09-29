@@ -13,8 +13,8 @@
 | delta_chi2 | — | chi2(single) − chi2(binary) |
 | f_imp | — | improvement fraction (El-Badry et al. 2018, Eq. B1) |
 | min_fimp_required | — | the Table B1 rung the star had to clear |
-| best_q | — | recovered mass ratio |
-| best_rv1, best_rv2 | km/s | component velocities in the combined spectrum |
+| best_q | — | mass ratio of the two-component model fitted to the combined spectrum. It is a parameter of the composite model (the flux ratio mapped onto mass through one 4 Gyr isochrone), not a measured mass ratio; where the visits allow, use q_dyn or q_wilson of the multi-epoch supplement |
+| best_rv1, best_rv2 | km/s | component velocities in the combined spectrum, relative to the DR19 pipeline rest frame of the coadd |
 | teff_single, logg_single, feh_single | K, dex, dex | best single-star fit labels |
 | error | — | non-empty if the fit failed |
 | sb2 | bool | accepted as SB2 at the recalibrated gate (all rows in this file) |
@@ -49,7 +49,7 @@ keep their Gaia identifier, position and DR19 pipeline velocities.
 | delta_chi2 | — | joint per-visit chi2(single) − chi2(binary), summed over visits |
 | f_imp | — | improvement fraction of the joint fit |
 | prefers_binary | bool | joint fit prefers the two-component model |
-| q_spec | — | mass ratio from the joint spectral fit |
+| q_spec | — | mass-ratio parameter of the two-component model in the joint visit fit (a model parameter like best_q, not a dynamical mass ratio). Where the joint fit falls back to the single-star solution (delta_chi2 = 0, 4,046 rows) it is exactly 1 |
 | q_dyn | — | dynamical mass ratio from the per-visit velocity amplitudes; blank unless the joint fit prefers two components, there are three or more visits, and the primary velocity changes by at least 1 km/s (the 1,920 confirmed systems whose primary does not move have no velocity amplitude to take a ratio of). A fit that falls back to the single-star solution sets q to one, which is why the first-revision table had a large group at exactly 1 |
 | q_dyn_at_bound | bool | q_dyn lies within 0.05 of an edge of the allowed range 0.1-1.5 (below 0.15 or above 1.45), where values pile up against the edge and are not constrained (586 of 6,490, 9.0%) |
 | v_single | km/s | barycentric velocity of the single-star model, one value for all visits |
@@ -199,7 +199,7 @@ catalogs (Gaia NSS, Kounkel et al. 2021, Kovalev et al. 2022/2024, and others).
 | sdss_id, gaia_dr3_source_id | identifiers; the Gaia id is the positional nearest neighbour |
 | is_sb2_benchmark | 1 for the injected/known SB2 benchmark, 0 for the control (single-star) set |
 | verdict, prefers_binary, delta_chi2, f_imp, min_fimp_required | classifier outputs and the gate the star had to clear |
-| best_q, best_rv1, best_rv2 | recovered mass ratio and component velocities |
+| best_q, best_rv1, best_rv2 | composite-model mass ratio and component velocities |
 | teff_single, logg_single, feh_single | best single-star fit labels |
 | teff_seed, logg_seed, feh_seed, v_macro, snr | pipeline seed labels and visit S/N |
 | ruwe, parallax, phot_g_mean_mag, bp_rp | Gaia DR3 quantities |
