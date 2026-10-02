@@ -2670,6 +2670,12 @@ def _v2_from_momentum(v1, gamma, q_dyn):
     return gamma + (gamma - v1) / max(q_dyn, 1e-3)
 
 
+# Pipeline visit velocities above this (km/s, absolute) are failures of the DR19
+# velocity fit (they reach ~1000 km/s, beyond any Galactic dwarf); the same cut
+# defines the usable visits of the SB1 selection (scripts/stage2_astra_rv.py).
+VRAD_OK_MAX = 400.0
+
+
 def _visit_to_barycentric(f, iv, v_rad, bc, input_frame, apply_bc=True):
     """Put one visit's raw flux/ivar in the barycentric frame for the joint fit.
 
@@ -2801,10 +2807,11 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             snr = float(np.median((f * np.sqrt(iv))[good]))
         if not np.isfinite(snr) or snr < snr_min:
             continue
-        # A rest-frame visit with no pipeline velocity cannot be put in the
-        # barycentric frame; fitting it unshifted would add a spurious velocity
-        # jump against the other visits, so it is left out.
-        if input_frame == "rest" and not np.isfinite(vh):
+        # A rest-frame visit with no pipeline velocity, or with a failed one
+        # (|v_rad| above VRAD_OK_MAX, up to ~1000 km/s), cannot be put in the
+        # barycentric frame; fitting it would add a spurious velocity jump
+        # against the other visits, so it is left out.
+        if input_frame == "rest" and not (np.isfinite(vh) and abs(vh) <= VRAD_OK_MAX):
             continue
         # Frame shift on the raw flux/ivar BEFORE normalization, so the per-chip
         # continuum is fit on the shifted spectrum exactly as for a coadd.
@@ -2824,7 +2831,7 @@ def dr19_visit_single_vs_binary(visits, seed=None, snr_min=30.0, max_visits=20,
             good = np.isfinite(f) & np.isfinite(iv) & (iv > 0)
             if not np.any(good):
                 continue
-            if input_frame == "rest" and not np.isfinite(vh):
+            if input_frame == "rest" and not (np.isfinite(vh) and abs(vh) <= VRAD_OK_MAX):
                 continue
             snr = (snr_meta if (np.isfinite(snr_meta) and snr_meta > 0)
                    else float(np.median((f * np.sqrt(iv))[good])))

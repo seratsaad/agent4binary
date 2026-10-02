@@ -22,10 +22,17 @@ ser = lambda s: np.array([float(x) for x in str(s).split(";") if x not in ("", "
 sample = sys.argv[1] if len(sys.argv) > 1 else "controls"
 vdir = {"controls": os.path.join(R, "data", "dr19_visits_ctl"), "singles": os.path.join(R, "data", "dr19_raw_visits")}[sample]
 
-rows = []
-for f in sorted(glob.glob(C("stage2_%s_shards/shard_*.csv" % sample))):
-    for r in csv.DictReader(open(f)):
-        r["sdss_id"] = r["sdss_id"].split(".")[0]; rows.append(r)
+rows = {}
+# the later directory wins: stars refit after leaving out failed pipeline
+# velocities (stage2_vfix_ctlsng_shards) replace their first-run rows
+for d in ("stage2_%s_shards" % sample, "stage2_vfix_ctlsng_shards"):
+    for f in sorted(glob.glob(C(d + "/shard_*.csv"))):
+        for r in csv.DictReader(open(f)):
+            r["sdss_id"] = r["sdss_id"].split(".")[0]
+            if d.startswith("stage2_vfix") and r["sdss_id"] not in rows:
+                continue
+            rows[r["sdss_id"]] = r
+rows = list(rows.values())
 split = {r["sdss_id"]: r["split"] for r in csv.DictReader(open(C("stage2_controls_split.csv")))} if sample == "controls" else {}
 rej = {r[list(r)[0]].split(".")[0] for r in csv.DictReader(open(os.path.join(R, "resources", "payne_dr19_sc_rejected.csv")))}
 gaia = {}
@@ -60,6 +67,8 @@ sid = [r["sdss_id"] for r in ok]; vs = np.array([vstd(s) for s in sid])
 ru = np.array([gaia.get(s, (np.nan, np.nan))[0] for s in sid]); ns = np.array([gaia.get(s, (np.nan, np.nan))[1] for s in sid])
 isrej = np.array([s in rej for s in sid])
 sp = np.array([np.ptp(ser(r["v1_per_visit"])) if r["prefers_binary"] == "True" else 0.0 for r in ok])
+# distinct observing nights, as for v1_span_gt20 and q_dyn in the supplement
+nn = np.array([len(set(np.floor(ser(r.get("mjd_per_visit", ""))))) for r in ok])
 stable = vs < 1.0; quiet = (ru < 1.1) & (ns == 0)
 P = lambda m: "%.1f%% (n=%d)" % (100 * pb[m].mean(), m.sum()) if m.sum() else "n/a"
 print("%s: rows %d | fitted with >= 2 visits %d | pipeline v_rad std known %d | Gaia known %d" % (sample, len(rows), len(ok), np.isfinite(vs).sum(), np.isfinite(ru).sum()))
@@ -73,11 +82,11 @@ if sample == "controls":
     print("in SC training set:", P(~isrej), "| rejected from it:", P(isrej), "| stable, in training:", P(stable & ~isrej))
     for h in ("heldout", "training"):
         m = np.array([split.get(s) == h for s in sid]); print("   %s half: %s | stable %s" % (h, P(m), P(m & stable)))
-fp3 = pb & (nv >= 3)
+fp3 = pb & (nn >= 3)
 if fp3.any():
     print("false positives with >= 3 epochs: %d | primary change < 1 km/s %.1f%% | > 10 km/s %.1f%% | median %.2f km/s"
           % (fp3.sum(), 100 * np.mean(sp[fp3] < 1), 100 * np.mean(sp[fp3] > 10), np.median(sp[fp3])))
-    m3 = nv >= 3; print("rate with >= 3 epochs AND a motion cut of 10 km/s: %.1f%% (n=%d)" % (100 * np.mean((pb & (sp > 10))[m3]), m3.sum()))
+    m3 = nn >= 3; print("rate with >= 3 nights AND a motion cut of 10 km/s: %.1f%% (n=%d)" % (100 * np.mean((pb & (sp > 10))[m3]), m3.sum()))
 cols = ["sdss_id", "split", "n_visits", "delta_chi2", "f_imp", "prefers_binary", "q_spec", "q_dyn", "v_single", "gamma", "v1_range",
         "v1_per_visit", "v2_per_visit", "mjd_per_visit", "rv1_untied_per_visit", "rv2_untied_per_visit", "v_rad_std_pipeline", "ruwe", "gaia_nss", "in_sc_training", "error"]
 vsd = dict(zip(sid, vs))
