@@ -52,3 +52,36 @@ print("single-star frame check: n=%d median %+.3f robust %.3f" % (len(dv.dropna(
 tw2 = b[(b.n_visits == 2)]
 print("two-visit rows %d, confirmed %d, unconfirmed twins q>=0.95 %d" % (len(tw2), (tw2.prefers_binary == True).sum(), ((tw2.prefers_binary == False) & (tw2.best_q >= 0.95)).sum()))
 print("velocity-confirmed x FP: about %.0f" % (0.4 * (b.n_visits >= 3).sum() * 6 / 83))
+
+# ---- nights-based cuts (q_dyn, v1_span_gt20, velocity-confirmed, motion-cut FPR)
+nights = lambda x: len(set(np.floor(np.array(str(x).split(";"), float)))) if isinstance(x, str) and x else 0
+b = b.assign(nn=b.mjd_per_visit.apply(nights))
+vc = b[cf & (b.nn >= 3) & (b.v1_range > 10)]
+print("velocity-confirmed (>=3 nights, change >10): %d; catalog SB2 with >=3 nights: %d" % (len(vc), (b.nn >= 3).sum()))
+o3 = b[b.v1_span_gt20 == True]
+print("v1_span_gt20 %d (all >=3 nights: %s), >=4 nights %d" % (len(o3), bool((o3.nn >= 3).all()), (o3.nn >= 4).sum()))
+TB = [(3000.0, 0.0), (2500.0, 0.05), (2000.0, 0.075), (1500.0, 0.10), (1000.0, 0.125), (750.0, 0.15), (600.0, 0.175), (450.0, 0.20), (300.0, 0.225)]
+def gate(d, f, s=0.9):
+    d, f = d / s, f / s
+    for lo, m_ in TB:
+        if d >= lo:
+            return f >= m_ if d >= 1e5 else f >= max(m_, 0.14)
+    return False
+bh = pd.read_csv(C("../fair_tests/bench_holdout_all.csv"), low_memory=False)
+bh["F"] = [gate(d, f) for d, f in zip(bh.delta_chi2, bh.f_imp)]
+for name in ("controls", "singles"):
+    t = pd.read_csv(C("stage2_%s.csv" % name), low_memory=False)
+    t = t[t.error.isna() & t.v1_per_visit.notna()].copy()
+    t["nfit"] = t.v1_per_visit.astype(str).str.count(";") + 1
+    t = t[t.nfit >= 2]
+    t["nn"] = t.mjd_per_visit.apply(nights)
+    t3 = t[t.nn >= 3]
+    mc = (t3.prefers_binary == True) & (t3.v1_range > 10)
+    print("%s: two-component %d/%d = %.1f%%; motion cut (>=3 nights) %d/%d = %.2f%%"
+          % (name, (t.prefers_binary == True).sum(), len(t), 100 * (t.prefers_binary == True).mean(), mc.sum(), len(t3), 100 * mc.mean()))
+    if name == "controls":
+        t = t.merge(bh[["sdss_id", "F"]], on="sdss_id", how="left")
+        st = t[(t.F == True) & (t.v_rad_std_pipeline < 1)]
+        st3 = st[st.nn >= 3]
+        print("  coadd-flagged steady controls: two-component %d/%d; motion cut %d/%d"
+              % ((st.prefers_binary == True).sum(), len(st), ((st3.prefers_binary == True) & (st3.v1_range > 10)).sum(), len(st3)))

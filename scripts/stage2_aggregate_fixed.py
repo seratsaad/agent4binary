@@ -36,9 +36,12 @@ if not rows:
     sys.exit("no corrected shards found")
 # Stars refit later (A4B_S2_OVERRIDE, e.g. stage2_framefix_shards: the 141 whose
 # fitted visits included one with no pipeline velocity) replace their rows.
-for f in sorted(glob.glob(C(os.environ.get("A4B_S2_OVERRIDE", "__none__") + "/shard_*.csv"))):
-    for r in csv.DictReader(open(f)):
-        rows[r["sdss_id"].split(".")[0]] = r
+# Several directories may be given, comma-separated, applied in order (e.g.
+# stage2_framefix_shards,stage2_vfix_shards: the later refit wins).
+for d in [x for x in os.environ.get("A4B_S2_OVERRIDE", "").split(",") if x]:
+    for f in sorted(glob.glob(C(d + "/shard_*.csv"))):
+        for r in csv.DictReader(open(f)):
+            rows[r["sdss_id"].split(".")[0]] = r
 cat = {r["sdss_id"].split(".")[0]: r for r in csv.DictReader(open(C("dr19_sb2_catalog_open.csv")))}
 gaia = {r["sdss_id"]: r for r in csv.DictReader(open(C("stage2_gaia_coords.csv")))}
 arv = {r["sdss_id"]: r for r in csv.DictReader(open(C("stage2_astra_rv.csv")))}
@@ -52,6 +55,9 @@ for s, r in rows.items():
     nv = int(F(r.get("n_visits"))) if np.isfinite(F(r.get("n_visits"))) else 0
     v1 = series(r.get("v1_per_visit", ""))
     span = float(np.ptp(v1)) if v1.size >= 2 else 0.0
+    # distinct observing nights among the fitted visits (several visits can share
+    # a night); the multi-epoch cuts below count nights, not visits
+    nights = len(set(np.floor(series(r.get("mjd_per_visit", ""))))) if r.get("mjd_per_visit") else 0
     binary = r.get("prefers_binary") == "True"
     in_cat = s in cat
     a = arv.get(s, {})
@@ -72,14 +78,15 @@ for s, r in rows.items():
                n_visits_rv_ok=n_ok,
                dv_rad_max_astra_ok="" if not np.isfinite(dv_ok) else "%.3f" % dv_ok,
                v_rad_median_astra=a.get("v_rad_median", ""), v_rad_std_astra=a.get("v_rad_std", ""),
-               v1_span_gt20=bool(in_cat and binary and nv >= 3 and span > 20.0),
+               n_nights=nights,
+               v1_span_gt20=bool(in_cat and binary and nights >= 3 and span > 20.0),
                sb1=bool((not in_cat) and n_ok >= 3 and np.isfinite(dv_ok) and 10.0 < dv_ok <= 480.0))
     # q_dyn means something only for a system the visit fit confirms. A fit that
     # falls back to the single-star solution sets q to one, which in the first
     # revision showed up as a large spurious group at q_dyn = 1.
     # A primary that does not move (span below 1 km/s) gives no velocity amplitude
     # to take a ratio of, so q_dyn is blank there too (1,920 confirmed rows).
-    if not binary or span < 1.0:
+    if not binary or span < 1.0 or nights < 3:
         rec["q_dyn"] = ""
         rec["q_dyn_at_bound"] = ""
     else:
@@ -168,7 +175,7 @@ legacy = C("stage2_catalog_full_legacy.csv")
 if not os.path.exists(legacy) and os.path.exists(C("stage2_catalog_full.csv")):
     shutil.copy(C("stage2_catalog_full.csv"), legacy)
 cols = ["sdss_id", "gaia_dr3_source_id", "ra", "dec", "in_sb2_catalog", "n_visits", "delta_chi2", "f_imp",
-        "prefers_binary", "q_spec", "q_dyn", "q_dyn_at_bound", "v_single", "gamma", "v1_range",
+        "n_nights", "prefers_binary", "q_spec", "q_dyn", "q_dyn_at_bound", "v_single", "gamma", "v1_range",
         "v1_per_visit", "v2_per_visit", "mjd_per_visit", "visit_index_per_visit",
         "rv1_untied_per_visit", "rv2_untied_per_visit", "q_wilson", "refit", "n_visits_rv",
         "v_rad_median_astra", "v_rad_std_astra", "dv_rad_max_astra", "n_visits_rv_ok", "dv_rad_max_astra_ok", "sb1", "v1_span_gt20", "error"]
