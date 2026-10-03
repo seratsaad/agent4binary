@@ -30,10 +30,13 @@ The method and the catalog are described in the accompanying paper: https://arxi
   `resources/dr19_sfbig_holdA_manifest.csv`, `resources/sfbig_holdA_keep_ids.txt`,
   `resources/sfbig_holdB_ids.txt`.
 
-- **Multi-epoch.** Fitting the individual visits confirms 68.5% of the
-  multiply-visited SB2 by velocity change, finds 519 single-lined velocity
-  variables, and leaves 8,981 systems with enough coverage for an orbit.
-  Table: `resources/census/stage2_catalog_full.csv`.
+- **Multi-epoch.** A joint fit to the individual visits prefers two stars for
+  45.5% of the 26,204 catalog SB2 with two or more usable visits, and for 94.4%
+  of those also found double-lined by published surveys. 4,149 of them change
+  primary velocity by more than 10 km/s over at least three nights, and the DR19
+  pipeline velocities give 3,943 velocity variables outside the catalog.
+  Table: `resources/census/stage2_catalog_full.csv`, columns in
+  `resources/census/COLUMNS.md`.
 
 ## Quick start
 
